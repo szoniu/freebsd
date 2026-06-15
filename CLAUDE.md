@@ -349,3 +349,6 @@ not `readonly`, so values can be overridden).
   the live-media bootstrap sequence, and the open risks / low-confidence items to verify on real
   hardware.
 - **`docs/HANDOFF.md`** — implementation status / what's wired vs TODO.
+- **`docs/LIVE-TEST.md`** — field runbook for testing on real hardware: live-media bootstrap
+  one-liners, the fix→`git pull`→re-run loop, per-device prep (PC / GPD Pocket 4 / Surface), and
+  the "watch list" of structurally-verified-only paths to confirm on first hardware run.
