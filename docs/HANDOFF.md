@@ -2,7 +2,7 @@
 
 > Dokument przekazania między sesjami Claude Code. Czytaj RAZEM z
 > [docs/DESIGN.md](DESIGN.md) (pełny brief badawczy + werdykty sprzętowe).
-> Repo: `~/dev/freebsd`, docelowo `github.com/szoniu/freebsd` (public, SSH) — jeszcze NIE zpushowane.
+> Repo: `~/dev/freebsd` → `github.com/szoniu/freebsd` (public, SSH). **Zpushowane** (initial import, branch `main`).
 
 ## Cel i decyzje (zatwierdzone przez użytkownika)
 
@@ -134,10 +134,9 @@ data: gpu_database, mirrors. tests: infer_config, resume, shrink, multiboot, dis
 
 1. **(opcjonalnie) DRY-RUN E2E**: `./install.sh --configure --dry-run` (uwaga: gum/bsddialog na Linuksie
    bywa kapryśny; ewentualnie smoke per-ekran). Smoke generacji + smoke faz (DRY_RUN) — ZROBIONE.
-2. **Push**: `git -C ~/dev/freebsd init`; remote `git@github.com:szoniu/freebsd.git`;
-   `gh repo create szoniu/freebsd --public --source ~/dev/freebsd --remote origin`; commit path-scoped
-   (NIGDY `git add -A` jeśli worktree współdzielony) + `git push -u origin main`.
+2. ✅ **Push — ZROBIONE** (initial import na `main`, SSH `git@github.com:szoniu/freebsd.git`, path-scoped).
 3. **Test na żywym sprzęcie** (użytkownik): boot live → fix na main → target `git pull` → re-run.
+   GPD Pocket 4 WiFi (MT7922) NIE działa → bootstrap kablem/USB-Ethernet.
 
 ## Pułapki dla integratora
 - Cały kod leci pod `set -Eeuo pipefail` + `inherit_errexit`: `(( x++ )) || true`; `cmd|grep` w `$()`
