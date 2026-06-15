@@ -22,22 +22,45 @@ FreeBSD rozprowadza obraz **`*-memstick.img`** (NIE plik ISO). Pobierz **pełny 
 
 Wybierz wydanie: **14.x (14.3 / 14.4) — zalecane** (najdojrzalsze sterowniki), albo **15.x (15.0 / 15.1)** jako „newest base". Plik: `FreeBSD-14.3-RELEASE-amd64-memstick.img`.
 
-Nagraj na pendrive (Linux/macOS):
+#### Nagranie przez `dd` (Linux)
+
+> **`dd` nie pyta o potwierdzenie i kasuje cel bez ostrzeżenia.** Pomyłka w `of=` = wymazany dysk systemowy. Najpierw **na 100% ustal nazwę pendrive'a**, dopiero potem pisz.
+
+**1. Znajdź urządzenie pendrive'a.** Wypisz dyski PRZED i PO włożeniu pendrive'a — nowy wpis to on:
 
 ```bash
-# UWAGA: /dev/sdX to TWÓJ pendrive, nie dysk systemowy! (sprawdź: lsblk)
-sudo dd if=FreeBSD-14.3-RELEASE-amd64-memstick.img of=/dev/sdX bs=4M status=progress
-sync
+lsblk -o NAME,SIZE,MODEL,TRAN,MOUNTPOINTS
 ```
 
-Jeśli pobrałeś wersję skompresowaną `.img.xz`, rozpakuj w locie:
+Pendrive rozpoznasz po rozmiarze i `TRAN=usb` (np. `sdb`, `sdc`). Dysk systemowy to zwykle `nvme0n1` lub `sda` (`TRAN=nvme`/`sata`). Cel to **całe urządzenie** (`/dev/sdb`), **nie** partycja (`/dev/sdb1`). Alternatywnie zaraz po włożeniu: `dmesg | tail` pokaże `sdX ... USB`.
+
+**2. Odmontuj auto-zamontowane partycje** (środowisko graficzne montuje pendrive samo — `dd` do podmontowanego nośnika może się wywalić):
 
 ```bash
-xzcat FreeBSD-14.3-RELEASE-amd64-memstick.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
-sync
+sudo umount /dev/sdX*    # podstaw swoje sdX; gwiazdka = wszystkie partycje
 ```
 
-Na Windows: [Rufus](https://rufus.ie) lub [balenaEtcher](https://etcher.balena.io).
+**3. Zapisz obraz** (podstaw `sdX`; `conv=fsync` wymusza zrzut na dysk przed końcem):
+
+```bash
+sudo dd if=FreeBSD-14.3-RELEASE-amd64-memstick.img of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+Jeśli pobrałeś skompresowane `.img.xz`, rozpakuj w locie (bez rozpakowywania na dysk):
+
+```bash
+xzcat FreeBSD-14.3-RELEASE-amd64-memstick.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+**4. Dosynchronizuj i sprawdź.** `sync` opróżnia bufory; `lsblk` powinno teraz pokazać partycje FreeBSD na pendrive:
+
+```bash
+sync && lsblk -o NAME,SIZE,LABEL /dev/sdX
+```
+
+Zobaczysz partycje typu `efi` i `FreeBSD_Install` — wtedy pendrive jest gotowy do bootowania. Możesz wyjąć.
+
+> macOS: to samo, ale urządzenie to `/dev/diskN` (znajdź przez `diskutil list`), odmontuj `diskutil unmountDisk /dev/diskN`, pisz na `/dev/rdiskN` (raw, szybsze). Windows: [Rufus](https://rufus.ie) (tryb **DD Image**) lub [balenaEtcher](https://etcher.balena.io).
 
 ### 2. Bootuj z pendrive
 
