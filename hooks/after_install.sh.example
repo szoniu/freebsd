@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Example hook: runs after installation completes
+# Copy this file without .example extension and make it executable:
+#   cp after_install.sh.example after_install.sh
+#   chmod +x after_install.sh
+
+echo "Custom post-install hook running..."
+# Add your custom commands here

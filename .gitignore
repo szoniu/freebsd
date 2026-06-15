@@ -1,0 +1,20 @@
+### ArchLinuxPackages template
+*.tar
+*.tar.*
+!data/gum.tar.gz
+*.jar
+*.exe
+*.msi
+*.zip
+*.tgz
+*.log
+*.log.*
+*.sig
+
+pkg/
+src/
+
+/venv/
+.idea/
+.claude/
+.DS_Store
