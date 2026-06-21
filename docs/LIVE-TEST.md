@@ -13,7 +13,7 @@
 | **GPD Pocket 4** | **KABEL / USB-Ethernet** (`ure`/`cdce`) — WiFi MT7922 NIE działa (BLOCKER) | USB | ekran live + loader **bokiem** (brak rotacji konsoli) — to normalne |
 | **Surface** Laptop/Book/Studio | wg chipu (AX200/AX201 częściowo; QCA6174 = USB dongle) | **zewn. USB kbd+mysz** — wbudowana przez SAM = martwa | Snapdragon (ARM64) = instalator ODMÓWI (amd64-only) |
 
-Nośnik: **FreeBSD 14.x RELEASE memstick** (pierwszy wybór, najdojrzalsze sterowniki). 15.0 jako „newest base".
+Nośnik: **FreeBSD 14.x RELEASE memstick** (pierwszy wybór, najdojrzalsze sterowniki). 15.0/15.1 jako „newest base".
 
 ## 1. Bootstrap live media → instalator (jako root w Live Shell)
 
@@ -54,7 +54,7 @@ Rzeczy **zweryfikowane tylko strukturalnie / na Linuksie** — pierwszy realny t
 
 ### Krytyczne ścieżki (mogą wywalić instalację)
 - **Parser `pciconf -lv` (dwa formaty)** — GPU/WiFi wykrywanie. Na realnym 14.x sprawdź `pciconf -lv | grep -A1 vgapci` — czy format to `vendor=0x.. device=0x..` czy `chip=0xDDDDVVVV`. Parser obsługuje oba, ale to testuj NAJPIERW (`./install.sh --configure` → ekran „Hardware" pokaże wykryty GPU/WiFi).
-- **`ZFSBOOT_*` de-facto knoby** — różnią się między 14.2/14.3/15.0. Jeśli `bsdinstall script` padnie na preamble, zdiffuj nasz preamble z `usr.sbin/bsdinstall/scripts/zfsboot` docelowego brancha.
+- **`ZFSBOOT_*` de-facto knoby** — różnią się między 14.2/14.3/15.0/15.1. Jeśli `bsdinstall script` padnie na preamble, zdiffuj nasz preamble z `usr.sbin/bsdinstall/scripts/zfsboot` docelowego brancha.
 - **Intel iGPU firmware = meta `gpu-firmware-kmod`** (fix: stary `gpu-firmware-intel-kmod` nie istniał). Ciągnie firmware WSZYSTKICH GPU (~dziesiątki MB) — zweryfikuj że `pkg install drm-kmod gpu-firmware-kmod` się rozwiązuje. UWAGA: na Alder Lake bywał boot-freeze przy obecnym firmware (drm-kmod #252) — gdyby zawisł boot, zrzuć `i915kms` z `kld_list` i `kldload` ręcznie.
 - **AMD Radeon 780M (GPD)** — sześć flavorów `gpu-firmware-amd-kmod-*` MUSI pasować; zły/brakujący = **kernel panic** przy ładowaniu amdgpu. Na niektórych 14.3 `amdgpu` w `kld_list` zamrażał boot → notatka POST-INSTALL opisuje fallback `kldload amdgpu` (patrz `/root/POST-INSTALL-NOTES.txt`).
 

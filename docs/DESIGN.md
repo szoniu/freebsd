@@ -2,8 +2,8 @@
 
 > Wygenerowany z 10-agentowego workflow badawczego (`freebsd-installer-research`, 2026-06-15).
 > Spec dla implementera + źródło sekcji „device caveats" do README. Target: **FreeBSD 14.x
-> RELEASE** jako pierwszy wybór (max dojrzałość sterowników), **15.0-RELEASE** (2025-12-02,
-> używa `bsddialog`) jako opcja „newest base". Shell layer: `bash` + `gum` bootstrapowane przez
+> RELEASE** jako pierwszy wybór (max dojrzałość sterowników), **15.0/15.1-RELEASE** (15.1 =
+> 2026-06-16, current production; `bsddialog`) jako opcja „newest base". Shell layer: `bash` + `gum` bootstrapowane przez
 > `pkg` na live media. Bazowa instalacja: `bsdinstall script` w trybie scripted; nasz TUI
 > generuje skrypt i robi post-install.
 
@@ -105,7 +105,7 @@ sysrc -f /boot/loader.conf zfs_load=YES
 `ZFSBOOT_DISKS`, kasuje Windows/ESP bez drugiego potwierdzenia gdy `nonInteractive=YES`. Brak
 dual-boot w auto-ZFS (wymaga ręcznego `PARTITIONS`/scriptedpart). `nonInteractive`/
 `ZFSBOOT_BOOT_TYPE`/`ZFSBOOT_PARTITION_SCHEME` to de-facto knoby — diff vs
-`usr.sbin/bsdinstall/scripts/zfsboot` dla docelowego brancha (14.2/14.3/15.0).
+`usr.sbin/bsdinstall/scripts/zfsboot` dla docelowego brancha (14.2/14.3/15.0/15.1).
 
 ---
 
@@ -138,7 +138,7 @@ Brak `/sys/class/drm` w early installerze → fallback panel-geometry (jak Chuwi
 ## 3. Graphics matrix
 
 `drm-kmod` = metaport auto-dobierający DRM: **14.x → drm-61-kmod (6.1)**, **15.0 → drm-66-kmod
-(6.6)**. Nie w base — kmod MUSI pasować do running kernel.
+(6.6)**, **15.1 → drm-612-kmod (6.12 LTS)**. Nie w base — kmod MUSI pasować do running kernel.
 
 | Vendor | pkg | kld | Kroki |
 |---|---|---|---|
@@ -350,7 +350,7 @@ kolorów; gum degraduje gracefully ale wymaga UTF-8 locale.
 4. **[Surface BLOCKER] SAM keyboard/touchpad** — martwe na Laptop 1-6/Book 3/Studio; wymaga
    zewn. USB kbd+mouse podczas instalacji.
 5. **[medium] `pciconf -lv` dwuformatowość** (`vendor=`/`device=` vs `chip=`) — TESTUJ parser
-   na realnym 14.x/15.0 live media.
+   na realnym 14.x/15.0/15.1 live media.
 6. **[medium] de-facto `ZFSBOOT_*` knoby** — diff vs `usr.sbin/bsdinstall/scripts/zfsboot` dla
    target brancha.
 7. **[medium] `ZFSBOOT_POOL_CREATE_OPTIONS` default różni się wersją** — USTAW JAWNIE.
@@ -360,5 +360,6 @@ kolorów; gum degraduje gracefully ale wymaga UTF-8 locale.
 10. **[medium] efibootmgr ≠ Linux** — FreeBSD bierze `-l /path/to/loader.efi` (nie
     `--disk/--part`). NIE kopiuj inwokacji z Linuksa.
 11. **[low] SMBIOS kenv puste na whitebox** ('To Be Filled By O.E.M.').
-12. **[low] 15.0 specyfika** — re-weryfikuj single-stage `loader.efi`, efibootmgr flags, ESP
-    260M, 2g swap default na live media.
+12. **[low] 15.0/15.1 specyfika** — re-weryfikuj single-stage `loader.efi`, efibootmgr flags, ESP
+    260M, 2g swap default na live media. 15.1: `bsdinstall` domyślnie robi **pkgbase**, ale nasze
+    jawne `DISTRIBUTIONS="kernel.txz base.txz"` wymusza legacy distset (OK, instalator odporny na flip).

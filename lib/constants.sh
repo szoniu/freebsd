@@ -42,7 +42,7 @@ readonly GPT_TYPE_FREEBSD_BOOT="freebsd-boot"
 : "${ZFS_POOL_OPTS_DEFAULT:=-O compression=lz4 -O atime=off}"
 
 # drm-kmod metaport auto-selects the DRM version matching the running kernel
-# (14.x -> drm-61-kmod, 15.0 -> drm-66-kmod). Keep the metaport as the default.
+# (14.x -> drm-61-kmod, 15.0 -> drm-66-kmod, 15.1 -> drm-612-kmod). Keep the metaport as the default.
 : "${DRM_KMOD_PKG:=drm-kmod}"
 
 # AMD Phoenix (Radeon 780M / gfx1103) firmware flavor split-packages. A missing
@@ -126,7 +126,7 @@ readonly -a CONFIG_VARS=(
     GPU_DEVICE_ID           # PCI device id
     GPU_DEVICE_NAME         # human-readable model
     GPU_KMOD                # amdgpu|i915kms|nvidia-modeset
-    DRM_PKG                 # drm-kmod (metaport) | drm-61-kmod | drm-66-kmod
+    DRM_PKG                 # drm-kmod (metaport) | drm-61-kmod | drm-66-kmod | drm-612-kmod
     GPU_FW_FLAVORS          # space-separated gpu-firmware-amd-kmod-* (Phoenix)
     HYBRID_GPU              # yes|no
     IGPU_VENDOR

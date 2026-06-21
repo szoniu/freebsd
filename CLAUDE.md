@@ -2,7 +2,7 @@
 
 ## What this is
 
-Interactive TUI installer for **FreeBSD 14.x/15.0** written in Bash + `gum`. A faithful
+Interactive TUI installer for **FreeBSD 14.x/15.0/15.1** written in Bash + `gum`. A faithful
 port of a family of 6 sibling Linux installers (Void / Gentoo / …) to FreeBSD. Goal:
 bootstrap `bash`/`gum` on the live memstick via `pkg`, clone the repo, run `./install.sh`,
 and be guided from disk selection to a working desktop. `./install.sh --resume` recovers
@@ -156,7 +156,7 @@ list + inline value docs). Highlights vs the Linux siblings:
 | `USER_GROUPS` | wheel,operator,video | FreeBSD convention |
 | `PRIV_TOOL` | doas / sudo | doas writes `/usr/local/etc/doas.conf` |
 | `GPU_KMOD` | amdgpu / i915kms / nvidia-modeset | loaded via `kld_list`, never loader.conf |
-| `DRM_PKG` | drm-kmod / drm-61-kmod / drm-66-kmod | metaport matches running kernel |
+| `DRM_PKG` | drm-kmod / drm-61-kmod / drm-66-kmod / drm-612-kmod | metaport matches running kernel |
 | `GPU_FW_FLAVORS` | space-separated | AMD Phoenix needs all six or it panics |
 | `DEVICE_PROFILE` | generic / gpd_pocket4 / surface | from kenv SMBIOS |
 | `WIFI_SUPPORTED` | 0 / 1 | 0 (e.g. MT7922) → warn, require wired bootstrap |
@@ -228,7 +228,7 @@ exit must not mask it). Use `einfo/ewarn/eerror/elog`; `die` aborts.
 - **ZFS + `bectl`.** Root-on-ZFS is the default profile; surface boot environments prominently
   (`bectl create`/`activate`). UFS is the low-overhead alternative and has **no** bectl.
 - **`drm-kmod` + AMD Phoenix firmware flavors.** `drm-kmod` is a metaport matching the running
-  kernel (14.x → drm-61, 15.0 → drm-66). The Radeon 780M (gfx1103) needs **all six**
+  kernel (14.x → drm-61, 15.0 → drm-66, 15.1 → drm-612). The Radeon 780M (gfx1103) needs **all six**
   `${AMD_PHOENIX_FW_FLAVORS}` — a missing/wrong flavor **panics the kernel** at amdgpu load.
 - **amdgpu/i915kms load via `sysrc kld_list+=…`, NEVER loader.conf.** drm-kmod in loader.conf
   panics early boot (drm-kmod #100). Always use `kld_list` in rc.conf. (On some 14.3 boxes even

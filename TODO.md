@@ -72,14 +72,20 @@ implemented. The items below are deferred, partial, or unverified-on-hardware.
 
 ## Release-version verification
 
-- [ ] **15.0 vs 14.x bsdinstall internals.** Re-verify on real media: the
+- [ ] **15.0/15.1 vs 14.x bsdinstall internals.** Re-verify on real media: the
   de-facto `ZFSBOOT_*` / `nonInteractive` knobs against
-  `usr.sbin/bsdinstall/scripts/zfsboot` for the target branch (14.2/14.3/15.0);
+  `usr.sbin/bsdinstall/scripts/zfsboot` for the target branch (14.2/14.3/15.0/15.1);
   `ZFSBOOT_POOL_CREATE_OPTIONS` default (differs by version — we set it
   explicitly); single-stage `loader.efi` path; `efibootmgr` flags; fixed 260M
   ESP; 2g vs 4g swap default; `pciconf -lv` dual format (`vendor=`/`device=` vs
-  legacy `chip=0xDDDDVVVV`) — test the GPU/WiFi parser on both 14.x and 15.0
+  legacy `chip=0xDDDDVVVV`) — test the GPU/WiFi parser on both 14.x and 15.0/15.1
   live media.
+- [ ] **15.1 pkgbase-by-default.** In 15.1 `bsdinstall` defaults to a packaged-base
+  install unless `DISTRIBUTIONS` is set — we set `DISTRIBUTIONS="kernel.txz base.txz"`
+  explicitly (`constants.sh` / `bsdinstall.sh`), which forces the legacy distset path,
+  so the flip does NOT bite. Confirm on real 15.1 media that the distset extract still
+  works and `/usr/freebsd-dist/*.txz` are present. (Major upgrade 14.x→15.1 of an
+  existing box lives in the dotfiles wizard, not here.)
 
 ## Security / boot
 
