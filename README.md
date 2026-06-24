@@ -80,6 +80,21 @@ ifconfig -l            # znajdź interfejs
 dhclient em0           # podstaw swój: igb0 / re0 / ure0 / ...
 ```
 
+> **Po instalacji — WiFi w zainstalowanym systemie.** Na zwykłym laptopie (np. **Intel AX201/AX211** jak w HP ProBook G8) chip ma sterownik. Instalator wykrywa go i — dla **Intel (`iwlwifi`)** — **sam wpisuje `if_iwlwifi` + `wlan0` (WPA/SYNCDHCP) do `rc.conf`** targetu oraz zostawia szablon `/etc/wpa_supplicant.conf`. Po pierwszym boocie uzupełniasz tam SSID/hasło i `service netif restart wlan0`. (`iwlwifi` to max **802.11ac** — bez WiFi 6/ax.) Realtek/Atheros instalator wykrywa, ale konfigurację zostawia w notatkach POST-INSTALL (nazwa modułu jest niejednoznaczna: rtw88 vs rtw89, ath vs ath10k). **Podczas samej instalacji i tak używaj kabla.**
+
+### 3b. (Opcjonalnie) Zdalny podgląd przez SSH
+
+Chcesz prowadzić instalację z innej maszyny (wygodniej niż na ekranie targetu)? Na live media jako `root`, gdy sieć już stoi:
+
+```sh
+passwd                                               # ustaw hasło roota (live nie ma żadnego)
+echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config   # domyślnie sshd blokuje login roota
+service sshd onestart                                # wystartuj sshd jednorazowo
+ifconfig em0 | grep 'inet '                          # odczytaj IP targetu (podstaw swój iface)
+```
+
+Z maszyny dev: `ssh root@<IP-targetu>`. **Odpalaj instalator w `tmux`** (doinstaluj `tmux` w kroku 4, potem `tmux`), żeby zerwane SSH nie ubiło instalacji — po rozłączeniu wrócisz przez `tmux attach`. Z drugiej zakładki tmux podglądasz log: `tail -f /tmp/freebsd-installer.log`.
+
 ### 4. Bootstrap warstwy shell + uruchomienie instalatora
 
 Live media FreeBSD ma root **tylko do odczytu**, tylko `/bin/sh` (ash, *nie* bash), `pkg` niezbootstrapowany i pusty/RO `/usr/local`. Trzeba położyć zapisywalną nakładkę i zbootstrapować warstwę shell:
@@ -96,7 +111,7 @@ cp -a /tmp.bak/. /tmp/
 
 # 3) pkg + warstwa shell (TMPDIR na zapisywalnym tmpfs):
 export TMPDIR=/usr/local
-pkg bootstrap -fy && pkg update -f && pkg install -y bash gum git
+pkg bootstrap -fy && pkg update -f && pkg install -y bash gum git tmux
 
 # 4) Środowisko konsoli dla gum na vt(4):
 export TERM=xterm-256color LANG=en_US.UTF-8 LC_CTYPE=en_US.UTF-8
@@ -147,6 +162,8 @@ Ekran desktopu oferuje jeden wybór (radiolist). Caveat FreeBSD jest pokazany in
 Każdy profil graficzny ciągnie `xorg`/`wayland` + `drm-kmod` i włącza `dbus` + `moused`. **PipeWire to usługa USER na FreeBSD** — nie ma `pipewire_enable` w `rc.conf`; startuje per-user przez XDG autostart. `elogind` i `seatd` konfliktują, więc instalator standaryzuje na **`seatd`**.
 
 > **COSMIC** (System76) jeszcze **NIE** w menu: w portach jest tylko `cosmic-comp` (sam kompozytor), brak `cosmic-session`/panelu/greetera → nie daje używalnej sesji. Dodanie zaplanowane, gdy pełna sesja trafi do binarnego pkg (TODO w `docs/DESIGN.md` §4).
+>
+> **Gershwin** (desktop GNUstep w stylu macOS, rozwijany w GhostBSD) też **NIE** w menu — i to świadomie. To wczesna **alfa**; na czystym FreeBSD stawia się go tylko przez `gershwin-build` (build ze źródeł) lub z **niestabilnych repo GhostBSD**, brak czystego binarnego `pkg` z gotową sesją (dziś używa nawet `xfce4-wm` jako WM). Ta sama logika co przy COSMIC: dodanie będzie jednolinijkowe (jak Mango), gdy trafi do binarnego pkg jako samodzielna sesja. Na razie wybierz **`none`** i złóż Gershwina ręcznie po instalacji.
 
 ## Uwagi per-urządzenie
 

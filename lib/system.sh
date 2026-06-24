@@ -114,10 +114,15 @@ _system_write_postinstall_notes() {
             ;;
     esac
 
-    # WiFi caveat is profile-independent (set by hardware detection).
+    # WiFi caveat is profile-independent (set by hardware detection); the note must
+    # mirror what _system_configure_wifi actually did (auto-wired intel vs left alone).
     local wifi_note="WiFi: detected driver present."
     if [[ "${WIFI_SUPPORTED:-1}" == "0" ]]; then
         wifi_note="WiFi: NO FreeBSD driver for the detected chip (${WIFI_VENDOR:-unknown} ${WIFI_DEVICE_ID:-}) — use wired/USB-Ethernet."
+    elif [[ "${WIFI_VENDOR:-}" == "intel" ]]; then
+        wifi_note="WiFi: if_iwlwifi + wlan0 wired into rc.conf (WPA/SYNCDHCP). Add your SSID/PSK to /etc/wpa_supplicant.conf, then 'service netif restart wlan0' (or reboot). NB: iwlwifi tops out at 802.11ac — no WiFi 6 (ax)."
+    else
+        wifi_note="WiFi: ${WIFI_VENDOR:-unknown} chip detected (a driver may exist) but NOT auto-configured — add the right module to kld_list + 'wlans_<dev>0=wlan0' + 'ifconfig_wlan0=\"WPA SYNCDHCP\"' by hand (FreeBSD Handbook ch. Wireless)."
     fi
 
     local be_note="ZFS boot environments: 'bectl list' to view, 'bectl activate freebsd-install-baseline' to roll back to the pristine install."
@@ -160,6 +165,59 @@ NOTESCRIPT
 )"
 }
 
+# _system_configure_wifi — wire a SUPPORTED WiFi chip into the target's rc.conf so
+# it actually comes up on first boot. Hardware detection (lib/hardware.sh) only SETS
+# WIFI_VENDOR/WIFI_SUPPORTED — nothing else turns the driver on. So a generic laptop
+# with e.g. Intel iwlwifi is detected, the user is (correctly) NOT pushed to wired
+# bootstrap, yet the installed system boots with NO wlan interface: WiFi silently dead
+# until hand-configured. We map the vendor to its kernel module, load it via kld_list,
+# build wlan0 over it, and arm WPA+SYNCDHCP. We do NOT know the user's SSID/PSK, so we
+# drop a 0600 /etc/wpa_supplicant.conf TEMPLATE — the plumbing is done, the user only
+# fills in credentials. Only vendors we can map UNAMBIGUOUSLY to a single module are
+# auto-wired (Intel iwlwifi today); realtek/atheros are left to the POST-INSTALL note
+# because the module is ambiguous (rtw88 vs rtw89, ath vs ath10k) and a wrong kld is
+# worse than none. All sysrc here is idempotent, so a --resume re-run is harmless.
+# Best-effort: a failure must never abort an already-bootable install.
+_system_configure_wifi() {
+    # Unsupported chip (e.g. MT7922): nothing to wire — notes already say "use wired".
+    if [[ "${WIFI_SUPPORTED:-1}" == "0" ]]; then
+        einfo "WiFi: detected chip has no FreeBSD driver — leaving rc.conf untouched (wired bootstrap)"
+        return 0
+    fi
+
+    local kmod="" parent=""
+    case "${WIFI_VENDOR:-}" in
+        intel)
+            kmod="if_iwlwifi"; parent="iwlwifi0" ;;
+        *)
+            ewarn "WiFi: ${WIFI_VENDOR:-unknown} chip detected but not auto-wired (driver ambiguous) — see POST-INSTALL notes"
+            return 0 ;;
+    esac
+
+    einfo "WiFi: wiring ${WIFI_VENDOR} (${kmod} -> wlan0) into rc.conf..."
+    # Outer heredoc is UNQUOTED so ${kmod}/${parent} interpolate on the host; the inner
+    # wpa_supplicant template uses a QUOTED heredoc so its body lands verbatim.
+    try "Enabling WiFi driver ${kmod} + wlan0 (WPA/DHCP)" chroot_sh "$(cat <<WIFISCRIPT
+sysrc kld_list+=${kmod}
+sysrc wlans_${parent}=wlan0
+sysrc ifconfig_wlan0="WPA SYNCDHCP"
+if [ ! -e /etc/wpa_supplicant.conf ]; then
+    ( umask 077; cat > /etc/wpa_supplicant.conf <<'WPAEOF'
+# wpa_supplicant.conf -- fill in your network, then bring wlan0 up:
+#     service netif restart wlan0      (or just reboot)
+# Scan for visible SSIDs first with:   ifconfig wlan0 up scan
+#
+# network={
+#     ssid="YOUR_SSID"
+#     psk="YOUR_PASSWORD"
+# }
+WPAEOF
+    )
+fi
+WIFISCRIPT
+)"
+}
+
 # _system_pkg_clean — reclaim the pkg(8) download cache on the target. The gpu/
 # desktop/extras phases pulled a lot of packages; their cached tarballs are dead
 # weight on a fresh install. -a all, -y yes. Best-effort: a clean failure must
@@ -178,6 +236,7 @@ system_finalize() {
     _system_reassert_login_conf
     _system_create_baseline_be
     _system_reassert_efi_entry
+    _system_configure_wifi
     _system_write_postinstall_notes
     _system_pkg_clean
 
