@@ -13,14 +13,16 @@ Wierny port **rodziny instalatorów szoniu** (bliźniacze: `alpine`, `chimeraos`
 
 ## Krok po kroku (od zera do działającego systemu)
 
+> **Gdzie fizycznie, skąd zdalnie.** Kroki **1–3b wykonujesz przy maszynie** (klawiatura + ekran targetu) — to kura-i-jajko: bez sieci i działającego `sshd` nie ma jak się połączyć. Od **kroku 4 (bootstrap + uruchomienie instalatora) możesz już działać przez SSH** z innej maszyny — montowanie tmpfs na `/usr/local` i `/tmp` nie rusza działającego `sshd` (klucze/config są w `/etc`), więc sesja nie pada. Jeśli nie chcesz zdalnie — pomiń §3b i zrób wszystko na targecie; też zadziała.
+
 ### 1. Przygotuj bootowalny pendrive (memstick)
 
 FreeBSD rozprowadza obraz **`*-memstick.img`** (NIE plik ISO). Pobierz **pełny memstick amd64** — nie mini-memstick (mini ciągnie bazę z sieci; pełny ma offline'owe `base.txz`/`kernel.txz` w `/usr/freebsd-dist`, więc instalacja bazy działa bez internetu):
 
 - Oficjalnie: https://www.freebsd.org/where/ → **Get FreeBSD** → **amd64**
-- Bezpośredni katalog: https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/14.3/
+- Bezpośredni katalog (podstaw wersję na końcu ścieżki — `14.3/`, `15.0/`, `15.1/`): https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/
 
-Wybierz wydanie: **14.x (14.3 / 14.4) — zalecane** (najdojrzalsze sterowniki), albo **15.x (15.0 / 15.1)** jako „newest base". Plik: `FreeBSD-14.3-RELEASE-amd64-memstick.img`.
+Wybierz wydanie: **14.x (14.3 / 14.4) — zalecane** (najdojrzalsze sterowniki), albo **15.x (15.0 / 15.1)** jako „newest base". Plik: `FreeBSD-14.3-RELEASE-amd64-memstick.img` (dla 15.0 analogicznie `FreeBSD-15.0-RELEASE-amd64-memstick.img`). Wersji nie musisz nigdzie podawać instalatorowi — `drm-kmod` sam dobiera sterownik pod uruchomiony kernel (14.x → `drm-61`, **15.0 → `drm-66`**, 15.1 → `drm-612`).
 
 #### Nagranie przez `dd` (Linux)
 
