@@ -71,6 +71,16 @@ Zobaczysz partycje typu `efi` i `FreeBSD_Install` — wtedy pendrive jest gotowy
 - Wybierz **UEFI** (nie Legacy/CSM), chyba że celowo instalujesz w trybie BIOS.
 - **Snapdragon / ARM64** (Surface Pro 11. gen, Laptop 7. gen): instalator wykryje i **ODMÓWI** — jest tylko amd64.
 
+W menu bootloadera FreeBSD **nie wciskaj nic** — pozwól odliczyć (opcja 1, Multi-user/Install). Gdy pojawi się menu instalatora `[ Install ] [ Shell ] [ Live CD ]`, wybierz **`Shell`** — to właściwy live shell (`#`), w którym robisz bootstrap (krok 4).
+
+> **„Gdzie jestem?" — nie pomyl promptów.** Jeśli zobaczysz `OK`, to **NIE** live shell, tylko prompt **loadera** (forth) — wpadasz w niego, wybierając „Escape to loader prompt"; uniksowe komendy dają tam „unknown command". Wpisz **`boot`**, żeby dokończyć start, potem wybierz `Shell`.
+>
+> | Prompt | Gdzie jesteś | Co zrobić |
+> |---|---|---|
+> | `OK` | loader (forth), przed startem OS | `boot` |
+> | menu `[Install] [Shell] [Live CD]` | bsdinstall | wybierz `Shell` |
+> | `#` | live shell (root) | tu robisz bootstrap (krok 4) |
+
 ### 3. Połącz się z internetem — KABLEM
 
 > **Ostrzeżenie WiFi — przeczytaj najpierw.** Na **GPD Pocket 4** i kilku modelach **Microsoft Surface** wbudowany chip WiFi **nie ma sterownika FreeBSD** (tabele niżej). Na tych maszynach **nie postawisz** WiFi na live media — użyj **kabla Ethernet lub przejściówki USB-Ethernet** (albo USB-tether z telefonu). Zaplanuj kabel.
@@ -89,11 +99,19 @@ dhclient em0           # podstaw swój: igb0 / re0 / ure0 / ...
 Chcesz prowadzić instalację z innej maszyny (wygodniej niż na ekranie targetu)? Na live media jako `root`, gdy sieć już stoi:
 
 ```sh
-passwd                                               # ustaw hasło roota (live nie ma żadnego)
-echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config   # domyślnie sshd blokuje login roota
-service sshd onestart                                # wystartuj sshd jednorazowo
+mount -uw /                                          # live root jest RO — BEZ tego passwd się nie utrwala ani sshd nie zapisze kluczy/configu
+passwd                                               # ustaw hasło roota (live nie ma żadnego; bez hasła sshd odbije PAM)
+echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config   # domyślnie sshd nie wpuszcza roota po haśle (prohibit-password)
+service sshd onestart                                # start sshd (wygeneruje brakujące klucze hosta w /etc/ssh)
 ifconfig em0 | grep 'inet '                          # odczytaj IP targetu (podstaw swój iface)
 ```
+
+> **`mount -uw /` jest kluczowe.** Live root montuje się read-only: bez przemontowania na RW `passwd` nie zapisze się do `/etc/master.passwd` (root zostaje bez hasła → `ssh` zwraca „PAM authentication error"), `echo >> sshd_config` daje „Read only file system", a `service sshd onestart` nie wygeneruje kluczy hosta. Memstick to fizyczny UFS, więc `mount -uw /` działa. **Gdyby sypnął** (rzadkie buildy z root na md(4)): nie utrwalisz hasła — wejdź na klucz publiczny, startując sshd bez edycji configu:
+> ```sh
+> ssh-keygen -t ed25519 -f /tmp/hk -N ''      # klucz hosta w zapisywalnym /tmp
+> mkdir -p /tmp/ssh && cat >> /tmp/ssh/authorized_keys   # wklej swój ~/.ssh/id_*.pub z dev, Ctrl-D
+> /usr/sbin/sshd -o PermitRootLogin=yes -o AuthorizedKeysFile=/tmp/ssh/authorized_keys -h /tmp/hk
+> ```
 
 Z maszyny dev: `ssh root@<IP-targetu>`. **Odpalaj instalator w `tmux`** (doinstaluj `tmux` w kroku 4, potem `tmux`), żeby zerwane SSH nie ubiło instalacji — po rozłączeniu wrócisz przez `tmux attach`. Z drugiej zakładki tmux podglądasz log: `tail -f /tmp/freebsd-installer.log`.
 
@@ -111,8 +129,10 @@ cp -a /tmp.bak/. /tmp/
 # 2) DNS:
 [ -s /etc/resolv.conf ] || echo 'nameserver 1.1.1.1' > /etc/resolv.conf
 
-# 3) pkg + warstwa shell (TMPDIR na zapisywalnym tmpfs):
-export TMPDIR=/usr/local
+# 3) pkg + warstwa shell. TMPDIR + baza/cache pkg na zapisywalnym tmpfs — inaczej
+#    duży katalog repo (zwł. 15.x) przepełnia ciasny live-tmpfs na /var:
+mkdir -p /usr/local/pkg/db /usr/local/pkg/cache
+export TMPDIR=/usr/local PKG_DBDIR=/usr/local/pkg/db PKG_CACHEDIR=/usr/local/pkg/cache
 pkg bootstrap -fy && pkg update -f && pkg install -y bash gum git tmux
 
 # 4) Środowisko konsoli dla gum na vt(4):
@@ -126,6 +146,7 @@ exec bash /tmp/installer/install.sh
 Pułapki:
 
 - **Remount `/tmp` jako tmpfs WYMAZUJE `resolv.conf`**, jeśli nie skopiujesz go z powrotem — krok 1 to robi. Gdy DNS padnie później, po prostu dodaj linię nameserver ponownie.
+- **`/var` na live media to ciasny tmpfs**, a `pkg` domyślnie pisze tam katalog repo (`/var/db/pkg`) i cache (`/var/cache/pkg`). Duży katalog binarnego repo (zwł. 15.x) go przepełnia → `pkg: ... database or disk is full`. Krok 3 przekierowuje `PKG_DBDIR`/`PKG_CACHEDIR` na większy tmpfs (`/usr/local`). Te zmienne dotyczą TYLKO bootstrapu live — instalator odcina je w chroocie (`chroot_pkg` robi `env -u PKG_DBDIR -u PKG_CACHEDIR`), więc baza pakietów targetu zawsze ląduje w jego `/var/db/pkg`.
 - `bash`/`gum`/`git` lądują w **`/usr/local/bin`**, nie `/bin` — dlatego każdy skrypt ma shebang `#!/usr/bin/env bash`. Plików `lib/*.sh` nie uruchamiaj wprost; są *source'owane*.
 - Konsola vt(4) renderuje 16 kolorów; `gum` degraduje się łagodnie, ale wymaga **locale UTF-8** (krok 4).
 - **Repo pkg zablokowane, ale GitHub działa?** Statyczna binarka `gum` dla FreeBSD/amd64 jest bundlowana w `data/gum.tar.gz` (asset `gum_0.17.0_Freebsd_x86_64.tar.gz`, uwaga na kapitalizowane `Freebsd`); instalator wypakowuje ją sam, więc twardo potrzebujesz tylko `bash` + `git`.

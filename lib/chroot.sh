@@ -32,7 +32,11 @@ chroot_pkg() {
         einfo "[DRY-RUN] chroot pkg install -y $*"
         return 0
     fi
-    chroot "${MOUNTPOINT}" env ASSUME_ALWAYS_YES=yes pkg install -y "$@"
+    # env -u: strip the live-bootstrap pkg redirect (README sets PKG_DBDIR/
+    # PKG_CACHEDIR onto a tmpfs so the small live /var doesn't overflow). If it
+    # leaked into the chroot, the TARGET's package DB would land at a nonstandard
+    # path and a freshly booted system would see zero installed packages.
+    chroot "${MOUNTPOINT}" env -u PKG_DBDIR -u PKG_CACHEDIR -u TMPDIR ASSUME_ALWAYS_YES=yes pkg install -y "$@"
 }
 
 # chroot_teardown — unmount devfs + ESP and export the pool. Best-effort,
