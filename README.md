@@ -94,6 +94,8 @@ dhclient em0           # podstaw swój: igb0 / re0 / ure0 / ...
 
 > **Po instalacji — WiFi w zainstalowanym systemie.** Na zwykłym laptopie (np. **Intel AX201/AX211** jak w HP ProBook G8) chip ma sterownik. Instalator wykrywa go i — dla **Intel (`iwlwifi`)** — **sam wpisuje `if_iwlwifi` + `wlan0` (WPA/SYNCDHCP) do `rc.conf`** targetu oraz zostawia szablon `/etc/wpa_supplicant.conf`. Po pierwszym boocie uzupełniasz tam SSID/hasło i `service netif restart wlan0`. (`iwlwifi` to max **802.11ac** — bez WiFi 6/ax.) Realtek/Atheros instalator wykrywa, ale konfigurację zostawia w notatkach POST-INSTALL (nazwa modułu jest niejednoznaczna: rtw88 vs rtw89, ath vs ath10k). **Podczas samej instalacji i tak używaj kabla.**
 
+> **Sieć przewodowa w zainstalowanym systemie działa od pierwszego bootu** — instalator wpisuje do `rc.conf` `ifconfig_DEFAULT="DHCP"`, więc dowolny interfejs Ethernet bez własnego configu dostaje DHCP, bez podawania nazwy `em0`/`igb0`. **Uwaga na KDE:** aplet sieci Plasmy (`plasma-nm`) bywa „ślepy" i pokazuje *brak sieci*, bo FreeBSD nie używa NetworkManagera — sieć stoi na `rc.conf`. To **kosmetyka**: sprawdź realną łączność przez `ping`, a WiFi konfiguruj przez `wpa_supplicant`/`rc.conf` (lub `service netif restart wlan0`), nie przez ikonkę. Doraźnie: `doas dhclient <iface>`.
+
 ### 3b. (Opcjonalnie) Zdalny podgląd przez SSH
 
 Chcesz prowadzić instalację z innej maszyny (wygodniej niż na ekranie targetu)? Na live media jako `root`, gdy sieć już stoi:
@@ -166,12 +168,12 @@ bash install.sh --non-interactive  # przerwij na każdym błędzie (bez menu rec
 
 ## Menu desktopów
 
-Ekran desktopu oferuje jeden wybór (radiolist). Caveat FreeBSD jest pokazany inline, żebyś widział trade-off przed wyborem. Display managery i obsługa „seat" w Waylandzie różnią się ostro od Linuksa — **nie ma systemd-logind**; sesje Wayland startują z loginu tty przez **`seatd`**, a user musi być w grupie `_seatd` (instalator robi `pw groupmod _seatd -m <user>`).
+Ekran desktopu oferuje jeden wybór (radiolist). Caveat FreeBSD jest pokazany inline, żebyś widział trade-off przed wyborem. Display managery i obsługa „seat" w Waylandzie różnią się ostro od Linuksa — **nie ma systemd-logind**; sesje Wayland startują przez **`seatd`**, a user musi mieć dostęp do jego socketu. Uwaga: na aktualnym `seatd` socket jest własnością grupy `seatd_group` (domyślnie **`video`**), a **nie** nieistniejącej grupy `_seatd` (`pw groupmod _seatd` zwraca „unknown group"); instalator pinuje `seatd_group=video` i dba, by user był w `video`.
 
 | Wybór | Stack | Caveat FreeBSD |
 |---|---|---|
 | **none** | Serwer, bez GUI — sama baza, login tty | Nic graficznego. |
-| **KDE Plasma** | `kde` / `plasma6-plasma` + **SDDM** | **`startplasma-x11` to stabilna ścieżka 2026**; Wayland działa, ale X11 jest udokumentowanym fallbackiem. Zepsute pod VirtualBox. |
+| **KDE Plasma** | `kde` / `plasma6-plasma` + **SDDM** | **Wybierz `startplasma-x11` (X11)** — stabilna ścieżka 2026. **Sesja Wayland z SDDM jest na FreeBSD zepsuta** (znany bug, nie regresja wersji — patrz nota niżej). Zepsute też pod VirtualBox. |
 | **GNOME** | `gnome` / `gnome-lite` + **GDM** (bundled) | Wymaga `proc /proc procfs rw 0 0` w fstab. |
 | **Xfce** | `xfce4` + **LightDM** | Lekki, niezawodny. |
 | **MATE** | `mate` / `mate-base` + **LightDM** | Tradycyjny, niezawodny; potrzebuje procfs w fstab. |
@@ -183,6 +185,8 @@ Ekran desktopu oferuje jeden wybór (radiolist). Caveat FreeBSD jest pokazany in
 | **Mango** | `mango` (Wayland, dwl-based tiling) | login tty przez `seatd`; **pewny binarny pkg** (Latest). Tagi w stylu dwm + efekty scenefx. |
 
 Każdy profil graficzny ciągnie `xorg`/`wayland` + `drm-kmod` i włącza `dbus` + `moused`. **PipeWire to usługa USER na FreeBSD** — nie ma `pipewire_enable` w `rc.conf`; startuje per-user przez XDG autostart. `elogind` i `seatd` konfliktują, więc instalator standaryzuje na **`seatd`**.
+
+> **KDE Plasma Wayland na FreeBSD — używaj X11 (zweryfikowane na sprzęcie).** Logowanie w sesję **Plasma (Wayland) z SDDM zwykle nie wstaje** i wyrzuca do ekranu logowania. W logu (`~/.local/share/sddm/wayland-session.log`) widać `kwin_wayland_drm: No suitable DRM devices have been found` — kompozytor nie przejmuje GPU spod SDDM (z SDDM-a nie dostaje aktywnego VT/seatu). To **nie regresja 15.0→15.1**, tylko długoletni, ogólnofreebsdowy problem (KDE Community Wiki notuje „SDDM may be bugged" dla Waylanda; handbook trzyma Wayland jako eksperymentalny). Udokumentowana metoda startu to **z TTY**, nie z SDDM: na wolnej konsoli (`Ctrl+Alt+F3`) `export XDG_RUNTIME_DIR=/var/run/user/$(id -u); mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"`, potem `dbus-run-session startplasma-wayland` — i bywa niestabilne. Jeśli i tak chcesz Waylanda dla gestów touchpada, potrzebujesz: `seatd` (running, user w `video`) + `XDG_RUNTIME_DIR` przy logowaniu, które na FreeBSD daje **`pam_xdg`** wpięty do **`/usr/local/etc/pam.d/sddm`** (porty trzymają politykę PAM w `/usr/local/etc/pam.d/`, NIE w `/etc/pam.d/`: `echo 'session optional pam_xdg.so' >> /usr/local/etc/pam.d/sddm`). Pragmatyczna alternatywa: **zostań na X11** i gesty 3-palcowe zrób przez `libinput-gestures` mapujące swipe na `qdbus` zmianę pulpitu.
 
 > **COSMIC** (System76) jeszcze **NIE** w menu: w portach jest tylko `cosmic-comp` (sam kompozytor), brak `cosmic-session`/panelu/greetera → nie daje używalnej sesji. Dodanie zaplanowane, gdy pełna sesja trafi do binarnego pkg (TODO w `docs/DESIGN.md` §4).
 >

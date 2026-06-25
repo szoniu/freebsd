@@ -176,12 +176,14 @@ desktop_install() {
 
     # --- seat access for Wayland ----------------------------------------------
     # On FreeBSD there is no logind; the compositor acquires its seat through
-    # seatd, which requires the user to be in the `_seatd` group. This is the
-    # single most-forgotten step (DESIGN.md §6) — the compositor just fails to
-    # start without it.
+    # seatd. Modern seatd guards its socket with `seatd_group` (default: video) —
+    # there is NO `_seatd` group (a stale assumption: `pw groupmod _seatd` errors
+    # "unknown group" and breaks the step). Pin the group to `video` and ensure
+    # the user is in it (DESIGN.md §6 — the single most-forgotten step; the
+    # compositor fails silently without seat access).
     if _de_is_wayland "${desktop}" && [[ -n "${USERNAME:-}" ]]; then
-        try "Adding ${USERNAME} to _seatd group" \
-            chroot_sh "pw groupmod _seatd -m ${USERNAME}"
+        try "Granting ${USERNAME} seat access (group video)" \
+            chroot_sh "sysrc seatd_group=video; pw groupmod video -m ${USERNAME}"
     fi
 
     # --- audio ----------------------------------------------------------------
@@ -234,8 +236,8 @@ install_extras() {
         try "Enabling seatd" \
             chroot_sh "sysrc seatd_enable=YES"
         if [[ -n "${USERNAME:-}" ]]; then
-            try "Adding ${USERNAME} to _seatd group" \
-                chroot_sh "pw groupmod _seatd -m ${USERNAME}"
+            try "Granting ${USERNAME} seat access (group video)" \
+                chroot_sh "sysrc seatd_group=video; pw groupmod video -m ${USERNAME}"
         fi
 
         # Compositor binary pkg may be missing (esp. hyprland) — best-effort.

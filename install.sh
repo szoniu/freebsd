@@ -182,6 +182,14 @@ preflight_checks() {
             if [[ "${FORCE}" == "1" ]]; then ewarn "No network (forced)"
             else die "Network connectivity required — bootstrap via wired/USB-Ethernet on devices without a working WiFi driver"; fi
         fi
+        # Mini-memstick / no offline base: a FULL memstick ships base.txz/kernel.txz
+        # in ${DIST_DIR}; a mini-memstick ships only MANIFEST. When base.txz is
+        # absent, bsdinstall must FETCH the dist set over the network (the generated
+        # preamble pins BSDINSTALL_DISTSITE so this stays non-interactive). Warn up
+        # front rather than failing late at distextract ("Failed to open kernel.txz").
+        if [[ ! -s "${DIST_DIR}/base.txz" ]]; then
+            ewarn "No offline base in ${DIST_DIR} (mini-memstick?) — base.txz/kernel.txz will be fetched from download.freebsd.org. A FULL memstick avoids this; ensure wired connectivity."
+        fi
         if ! check_dependencies; then
             if [[ "${FORCE}" == "1" ]]; then ewarn "Missing deps (forced)"
             else die "Missing dependencies"; fi
