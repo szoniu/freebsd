@@ -239,7 +239,20 @@ bsdinstall_mount_target() {
     if [[ "${FS_PROFILE}" == "zfs" ]]; then
         local pool="${ZFS_POOL_NAME:-${ZFS_POOL_NAME_DEFAULT}}"
         if ! zpool list "${pool}" >/dev/null 2>&1; then
-            try "Importing ZFS pool ${pool}" zpool import -fR "${MOUNTPOINT}" "${pool}"
+            # -N: import WITHOUT auto-mounting so we can mount the root boot
+            # environment FIRST; otherwise the child datasets (canmount=on) mount
+            # onto an empty ${MOUNTPOINT} and shadow the root once it appears.
+            try "Importing ZFS pool ${pool}" zpool import -f -N -R "${MOUNTPOINT}" "${pool}"
+        fi
+        # The root filesystem lives in the ACTIVE boot environment (e.g.
+        # ${pool}/ROOT/default), which has canmount=noauto — neither `zpool
+        # import` nor `zfs mount -a` mounts it. Mount the bootfs explicitly, or
+        # ${MOUNTPOINT} stays empty and every post-install chroot phase dies with
+        # "chroot: env: No such file or directory".
+        local be
+        be="$(zpool get -H -o value bootfs "${pool}" 2>/dev/null || true)"
+        if [[ -n "${be}" && "${be}" != "-" ]] && ! mount | grep -q " on ${MOUNTPOINT} (zfs"; then
+            try "Mounting boot environment ${be}" zfs mount "${be}"
         fi
         zfs mount -a 2>/dev/null || true
         # Also mount the ESP: the finalize phase re-pins the EFI boot entry and
