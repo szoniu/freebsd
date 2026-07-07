@@ -10,6 +10,7 @@ Wierny port **rodziny instalatorów szoniu** (bliźniacze: `alpine`, `chimeraos`
 
 > Pełne uzasadnienie każdej decyzji specyficznej dla FreeBSD: [`docs/DESIGN.md`](docs/DESIGN.md).
 > Runbook testu na żywym sprzęcie: [`docs/LIVE-TEST.md`](docs/LIVE-TEST.md). Status: [`docs/HANDOFF.md`](docs/HANDOFF.md).
+> **Zanim wymażesz dysk:** checklist sprzętowy na live USB — [`docs/LIVE-USB-CHECKLIST.md`](docs/LIVE-USB-CHECKLIST.md) + `tests/live-hw-check.sh` (sekcja [„Sprawdź sprzęt"](#5-zalecane-sprawdź-sprzęt-zanim-wymażesz-dysk) niżej). Co realnie działa na FreeBSD jako daily driver: [`docs/DAILY-DRIVER-AUDIT.md`](docs/DAILY-DRIVER-AUDIT.md).
 
 ## Krok po kroku (od zera do działającego systemu)
 
@@ -153,6 +154,19 @@ Pułapki:
 - Konsola vt(4) renderuje 16 kolorów; `gum` degraduje się łagodnie, ale wymaga **locale UTF-8** (krok 4).
 - **Repo pkg zablokowane, ale GitHub działa?** Statyczna binarka `gum` dla FreeBSD/amd64 jest bundlowana w `data/gum.tar.gz` (asset `gum_0.17.0_Freebsd_x86_64.tar.gz`, uwaga na kapitalizowane `Freebsd`); instalator wypakowuje ją sam, więc twardo potrzebujesz tylko `bash` + `git`.
 
+### 5. (Zalecane) Sprawdź sprzęt, zanim wymażesz dysk
+
+Repo zawiera **POSIX-owy skrypt diagnostyczny** do uruchomienia z live shella (działa na gołym `/bin/sh`, przed bootstrapem basha — wystarczy krok 3 z siecią, żeby sklonować repo, albo pendrive z wgraną kopią):
+
+```sh
+sh /tmp/installer/tests/live-hw-check.sh          # read-only diagnostyka, nic nie zmienia
+sh /tmp/installer/tests/live-hw-check.sh --probe-kmods   # dodatkowo spróbuje kldload (ig4/iichid itp.)
+```
+
+Skrypt wypisuje PASS/FAIL/INFO per komponent: **GPU** (klasa/vendor → który drm-kmod), **WiFi** (chipset → werdykt: Intel iwlwifi OK / MediaTek MT7922 martwy), **suspend** (`hw.acpi.supported_sleep_state` — jest S3 czy nie), **bateria**, **audio** (w tym ostrzeżenie SOF/DMIC: na laptopach z Intel Smart Sound wewnętrzny mikrofon NIE zadziała — używaj jacka/USB), **touchpad I2C** (warunek pełnych gestów multitouch), **Thunderbolt/USB4** (brak wsparcia — docki TB nie działają), dyski docelowe.
+
+Werdykty per maszyna-kandydat (ProBook 450 G8 — przetestowany w polu; ThinkPad X1 Nano Gen 1 — wymaga BIOS ≥1.43 + Sleep="Linux"; HP Elite Dragonfly) i interpretacja wyników: [`docs/LIVE-USB-CHECKLIST.md`](docs/LIVE-USB-CHECKLIST.md).
+
 ### Inne tryby uruchomienia
 
 ```sh
@@ -191,6 +205,16 @@ Każdy profil graficzny ciągnie `xorg`/`wayland` + `drm-kmod` i włącza `dbus`
 > **COSMIC** (System76) jeszcze **NIE** w menu: w portach jest tylko `cosmic-comp` (sam kompozytor), brak `cosmic-session`/panelu/greetera → nie daje używalnej sesji. Dodanie zaplanowane, gdy pełna sesja trafi do binarnego pkg (TODO w `docs/DESIGN.md` §4).
 >
 > **Gershwin** (desktop GNUstep w stylu macOS, rozwijany w GhostBSD) też **NIE** w menu — i to świadomie. To wczesna **alfa**; na czystym FreeBSD stawia się go tylko przez `gershwin-build` (build ze źródeł) lub z **niestabilnych repo GhostBSD**, brak czystego binarnego `pkg` z gotową sesją (dziś używa nawet `xfce4-wm` jako WM). Ta sama logika co przy COSMIC: dodanie będzie jednolinijkowe (jak Mango), gdy trafi do binarnego pkg jako samodzielna sesja. Na razie wybierz **`none`** i złóż Gershwina ręcznie po instalacji.
+
+## Faza laptop (automatyczna, gdy wykryta bateria)
+
+Gdy `hw.acpi.battery.units > 0`, po quirkach urządzeń odpala się dedykowana faza konfigurująca system pod laptopa:
+
+- **Zarządzanie energią:** `powerd_enable=YES` (adaptive na baterii, hiadaptive na AC) + `performance_cx_lowest=C2` / `economy_cx_lowest=Cmax`.
+- **Suspend / klapa:** jeśli firmware wspiera **S3** (`hw.acpi.supported_sleep_state`) i instalujesz desktop → `hw.acpi.lid_switch_state=S3` (zamknięcie klapy usypia) + `devfs.conf` daje grupie `operator` dostęp do `/dev/acpi`, żeby power-menu robiło `acpiconf -s 3` bez roota. **Brak S3 = głośna notka** — nowe laptopy (s0ix-only) nie mają suspendu na FreeBSD do czasu wejścia s2idle (~15.2); na ThinkPadach sprawdź w BIOS `Sleep State = "Linux"`. Przy `DESKTOP_TYPE=none` (laptop-serwer) klapa NIE usypia.
+- **Touchpad:** `kld_list+="ig4 iichid"` (HID-over-I2C — warunek pełnego multitoucha/gestów) + `hw.psm.synaptics_support=1` dla touchpadów PS/2.
+- **Backlight:** reguła devfs dająca grupie `video` dostęp do `/dev/backlight/*` — klawisze jasności działają z sesji usera (`backlight(8)`).
+- **ThinkPad:** wykrycie po SMBIOS → `kld_list+=acpi_ibm` (hotkeys, wentylator, LED).
 
 ## Uwagi per-urządzenie
 
@@ -300,6 +324,7 @@ lib/              — moduły biblioteczne (SOURCE'owane, nigdy uruchamiane)
   gpu.sh          — drm-kmod + flavory firmware + kld_list
   desktop.sh      — DE / display manager / seatd+dbus / grupy
   system.sh       — locale (login.conf + cap_mkdb), users, finalize, baseline bectl
+  laptop.sh       — faza laptop: powerd, lid/S3, devfs (backlight+acpi), ig4/iichid, acpi_ibm
   umpc.sh         — quirki GPD Pocket 4 / Surface
   hooks.sh        — haki faz before_*/after_*
   preset.sh       — export/import reużywalnego configu (nakładka sprzętowa)
@@ -308,9 +333,11 @@ tui/              — ekrany TUI (każdy to screen_*() zwracający TUI_NEXT/BACK
 data/             — bundlowana binarka gum, motyw dialog
 presets/          — przykładowe konfiguracje
 hooks/            — *.sh.example
-tests/            — samodzielne testy
+tests/            — samodzielne testy + live-hw-check.sh (POSIX sh — diagnostyka na live USB)
 docs/DESIGN.md    — spec implementacyjny (szablony bsdinstall, matryca sprzętowa, caveaty)
-docs/LIVE-TEST.md — runbook testu na żywym sprzęcie
+docs/LIVE-TEST.md — runbook testu na żywym sprzęcie (pętla fix→pull→re-run)
+docs/LIVE-USB-CHECKLIST.md — checklist sprzętowy przed instalacją, per maszyna-kandydat
+docs/DAILY-DRIVER-AUDIT.md — audyt: co działa na FreeBSD jako desktop daily driver (2026-07)
 docs/HANDOFF.md   — status / co podłączone vs TODO
 ```
 </content>
