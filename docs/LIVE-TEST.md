@@ -58,6 +58,14 @@ Rzeczy **zweryfikowane tylko strukturalnie / na Linuksie** — pierwszy realny t
 - **Intel iGPU firmware = meta `gpu-firmware-kmod`** (fix: stary `gpu-firmware-intel-kmod` nie istniał). Ciągnie firmware WSZYSTKICH GPU (~dziesiątki MB) — zweryfikuj że `pkg install drm-kmod gpu-firmware-kmod` się rozwiązuje. UWAGA: na Alder Lake bywał boot-freeze przy obecnym firmware (drm-kmod #252) — gdyby zawisł boot, zrzuć `i915kms` z `kld_list` i `kldload` ręcznie.
 - **AMD Radeon 780M (GPD)** — sześć flavorów `gpu-firmware-amd-kmod-*` MUSI pasować; zły/brakujący = **kernel panic** przy ładowaniu amdgpu. Na niektórych 14.3 `amdgpu` w `kld_list` zamrażał boot → notatka POST-INSTALL opisuje fallback `kldload amdgpu` (patrz `/root/POST-INSTALL-NOTES.txt`).
 
+### Desktop / Wayland userland
+- **Portale + xwayland-satellite instalują się best-effort (pkg po pkg)** — brak binarki daje tylko
+  `ewarn`, który łatwo umyka w przewijającym się logu. Po fazie desktop sprawdź na targecie, że pakiety
+  realnie weszły z binarnego pkg: niri → `pkg info xdg-desktop-portal-gnome xwayland-satellite`;
+  mango/sway → `pkg info xdg-desktop-portal-wlr`; hyprland → `pkg info xdg-desktop-portal-hyprland`.
+  Brak = doinstaluj z pkg/ports zanim uznasz sesję za sprawną (bez portali padnie screenshot/screencast,
+  bez xwayland-satellite — appki X11 pod niri).
+
 ### UEFI / dysk
 - **`efibootmgr` (FreeBSD ≠ Linux)** — re-pin wpisu w fazie finalize, teraz ESP montowany też na ZFS. Po instalacji sprawdź `efibootmgr -v` czy jest wpis „FreeBSD". (Best-effort: bsdinstall zwykle już go tworzy.)
 - **UFS + BIOS** (jeśli testujesz tę kombinację) — generuje teraz `512k freebsd-boot` zamiast efi-only. Na czystym BIOS sprawdź że bootuje. UEFI/auto dalej dają `efi`.

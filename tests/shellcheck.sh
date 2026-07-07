@@ -17,7 +17,13 @@ files=0
 
 while IFS= read -r -d '' file; do
     (( files++ )) || true
-    if ! shellcheck --shell=bash --severity=warning \
+    # Lint POSIX /bin/sh scripts as sh so bashisms are caught — e.g.
+    # tests/live-hw-check.sh runs on the bare live medium WITHOUT bash.
+    shell="bash"
+    case "$(head -n 1 "${file}")" in
+        '#!/bin/sh'*) shell="sh" ;;
+    esac
+    if ! shellcheck --shell="${shell}" --severity=warning \
          --exclude=SC1091,SC2034,SC2154,SC1090,SC2155 \
          "${file}"; then
         (( errors++ )) || true

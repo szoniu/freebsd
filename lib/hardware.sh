@@ -189,7 +189,7 @@ detect_wifi() {
             ewarn "      Bootstrap via wired/USB-Ethernet; built-in WiFi will not associate." ;;
         8086)
             WIFI_VENDOR="intel"; WIFI_SUPPORTED=1
-            einfo "WiFi: Intel ${WIFI_DEVICE_ID} (${name}) — iwlwifi (partial: 11a/b/g/n)" ;;
+            einfo "WiFi: Intel ${WIFI_DEVICE_ID} (${name}) — iwlwifi (802.11 a/b/g/n/ac since 14.3 via LinuxKPI; ax/WiFi 6 in progress — Foundation, 2026)" ;;
         10ec|0bda)
             WIFI_VENDOR="realtek"; WIFI_SUPPORTED=1
             einfo "WiFi: Realtek ${WIFI_DEVICE_ID} (${name}) — rtw88/rtw89 (best-effort)" ;;
@@ -288,6 +288,21 @@ detect_webcam() {
         WEBCAM_DETECTED=1; einfo "Webcam detected (USB UVC — needs multimedia/webcamd)"
     fi
     export WEBCAM_DETECTED
+}
+
+# detect_battery — ACPI battery count. Gates the generic "laptop" phase
+# (lib/laptop.sh: powerd, suspend, backlight, touchpad). hw.acpi.battery.units
+# does not exist on desktops/VMs (sysctl fails) -> 0. Sanitize to an integer so
+# a weird sysctl output can never leak shell-significant text into the config.
+detect_battery() {
+    BATTERY_DETECTED=$(sysctl -n hw.acpi.battery.units 2>/dev/null) || BATTERY_DETECTED=0
+    case "${BATTERY_DETECTED}" in
+        ''|*[!0-9]*) BATTERY_DETECTED=0 ;;
+    esac
+    if [[ "${BATTERY_DETECTED}" != "0" ]]; then
+        einfo "Battery: ${BATTERY_DETECTED} ACPI unit(s) detected — laptop phase will apply"
+    fi
+    export BATTERY_DETECTED
 }
 
 # --- Disk detection -----------------------------------------------------------
@@ -475,6 +490,7 @@ detect_all_hardware() {
     detect_device_profile
     detect_bluetooth
     detect_webcam
+    detect_battery
     detect_disks
     detect_esp
     detect_installed_oses
@@ -502,6 +518,7 @@ get_hardware_summary() {
         fi
     fi
     [[ "${BLUETOOTH_DETECTED:-0}" == "1" ]] && summary+="Bluetooth: detected\n"
+    [[ "${BATTERY_DETECTED:-0}" != "0" ]] && summary+="Battery: ${BATTERY_DETECTED} ACPI unit(s) — laptop phase (powerd/suspend/backlight/touchpad) will apply\n"
     [[ "${SURFACE_DETECTED:-0}" == "1" ]] && summary+="Microsoft Surface: ${SURFACE_MODEL:-detected} (best-effort — see README)\n"
     if [[ "${UMPC_DETECTED:-0}" == "1" ]]; then
         summary+="UMPC: ${UMPC_VENDOR} ${UMPC_MODEL}\n"

@@ -323,7 +323,8 @@ Touch / pen:
         usbconfig ; sysctl dev.iichid
 
 WiFi (chip-dependent):
-  - Intel AX200 / AX201 (Go 2/3, Pro 7/8): iwlwifi, but 802.11 a/b/g only.
+  - Intel AX200 / AX201 (Go 2/3, Pro 7/8): iwlwifi — 802.11 a/b/g/n/ac since
+    14.3 (LinuxKPI); ax/WiFi 6 is in progress (FreeBSD Foundation, 2026).
         sysrc kld_list+=if_iwlwifi ; sysrc wlans_iwlwifi0=wlan0
   - Qualcomm QCA6174 (original Go, many Pro 4-6): ath10k is disconnected from
     the build -> NO WiFi. Use a USB Ethernet/WiFi dongle.

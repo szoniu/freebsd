@@ -76,6 +76,7 @@ screen_progress() {
     _run_phase "gpu"           "Graphics drivers"               gpu_install
     _run_phase "desktop"       "Desktop environment"            desktop_install
     _run_phase "device_quirks" "Device quirks"                  device_quirks_apply
+    _run_phase "laptop"        "Laptop configuration"           laptop_setup_apply
     _run_phase "extras"        "Extra packages"                 install_extras
     _run_phase "finalize"      "Finalizing"                     system_finalize
 

@@ -85,6 +85,7 @@ readonly -a CHECKPOINTS=(
     "gpu"               # drm-kmod + firmware flavors + kld_list
     "desktop"           # pkg DE + display manager + seatd/dbus + groups
     "device_quirks"     # GPD Pocket 4 / Surface quirks (best-effort)
+    "laptop"            # battery-gated: powerd/Cx, suspend (S3), backlight, touchpad, ThinkPad
     "extras"            # extra packages, Wayland shells, gaming
     "finalize"          # cap_mkdb, efibootmgr re-assert, bectl baseline, POST-INSTALL notes
 )
@@ -154,6 +155,7 @@ readonly -a CONFIG_VARS=(
     WIFI_SUPPORTED          # 0|1  (0 = no FreeBSD driver, e.g. MT7922 -> wired bootstrap)
     BLUETOOTH_DETECTED      # 0|1
     WEBCAM_DETECTED         # 0|1
+    BATTERY_DETECTED        # 0|N  ACPI battery count (hw.acpi.battery.units) — gates the laptop phase
     # --- extras / community ---
     EXTRA_PACKAGES          # space-separated additional pkg
     ENABLE_NOCTALIA         # yes|no  (Noctalia Wayland shell)

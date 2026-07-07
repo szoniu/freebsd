@@ -164,7 +164,11 @@ sysrc sshd_enable=YES
 sysrc sendmail_enable=NONE
 sysrc ntpd_enable=YES
 sysrc ntpd_sync_on_start=YES
-sysrc moused_enable=YES
+$( # moused only for console-only installs: under a desktop the input stack is
+   # libinput (X11) / the compositor (Wayland), and a running moused would draw
+   # a SECOND, desynced cursor on top of it. DESKTOP_TYPE is in CONFIG_VARS and
+   # is set before this script is generated.
+   [[ "${DESKTOP_TYPE:-none}" == "none" ]] && echo 'sysrc moused_enable=YES' )
 
 # timezone / console keymap
 tzsetup ${q_tz} || cp -f /usr/share/zoneinfo/${q_tz} /etc/localtime || true

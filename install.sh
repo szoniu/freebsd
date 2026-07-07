@@ -42,6 +42,7 @@ source "${LIB_DIR}/gpu.sh"
 source "${LIB_DIR}/desktop.sh"
 source "${LIB_DIR}/system.sh"
 source "${LIB_DIR}/umpc.sh"
+source "${LIB_DIR}/laptop.sh"
 source "${LIB_DIR}/hooks.sh"
 source "${LIB_DIR}/preset.sh"
 

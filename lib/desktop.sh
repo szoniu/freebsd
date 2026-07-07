@@ -158,6 +158,36 @@ desktop_install() {
         _ensure_target_procfs
     fi
 
+    # --- Wayland session userland (tty compositors) -----------------------------
+    # The compositor pkgs are BARE — no terminal, launcher, notifications,
+    # screenshot tools, lock, wallpaper, portals or fonts — so the first session
+    # would be unusable (DAILY-DRIVER-AUDIT "Poprawki — instalator" #2). Install
+    # the standard set best-effort, one pkg at a time (mirroring the gaming
+    # loop): the binary catalog may lack some, and a single miss must not abort
+    # the desktop phase. Portals are per-compositor: niri implements the GNOME
+    # portal interfaces (+ needs xwayland-satellite for X11 apps); the wlroots
+    # family (mango/sway) uses xdg-desktop-portal-wlr for screencast/screenshot;
+    # Hyprland ships its own backend (xdg-desktop-portal-hyprland).
+    if _de_is_wayland "${desktop}"; then
+        local -a wl_pkgs=(
+            foot fuzzel mako grim slurp swaylock swaybg
+            xdg-desktop-portal xdg-user-dirs
+            noto-basic dejavu
+        )
+        case "${desktop}" in
+            niri)       wl_pkgs+=(xdg-desktop-portal-gnome xwayland-satellite) ;;
+            mango|sway) wl_pkgs+=(xdg-desktop-portal-wlr) ;;
+            hyprland)   wl_pkgs+=(xdg-desktop-portal-hyprland) ;;
+        esac
+        einfo "Installing Wayland session userland: ${wl_pkgs[*]}"
+        local wl_pkg
+        for wl_pkg in "${wl_pkgs[@]}"; do
+            if ! chroot_pkg "${wl_pkg}"; then
+                ewarn "Wayland package '${wl_pkg}' not available in pkg — install it from ports on the target"
+            fi
+        done
+    fi
+
     # --- enable services in rc.conf -------------------------------------------
     # dbus everywhere; seatd for Wayland; the display manager when there is one.
     einfo "Enabling desktop services (sysrc)"
@@ -184,6 +214,21 @@ desktop_install() {
     if _de_is_wayland "${desktop}" && [[ -n "${USERNAME:-}" ]]; then
         try "Granting ${USERNAME} seat access (group video)" \
             chroot_sh "sysrc seatd_group=video; pw groupmod video -m ${USERNAME}"
+    fi
+
+    # --- XDG_RUNTIME_DIR for tty-started Wayland sessions -----------------------
+    # These compositors have NO display manager: the session starts from a tty
+    # login, and nothing creates /var/run/user/<uid> — so the very first
+    # compositor start fails on a missing XDG_RUNTIME_DIR (DAILY-DRIVER-AUDIT
+    # BLOCKER #1). pam_xdg(8) is in BASE on 14.x/15.x (field-tested on the
+    # ProBook 15.1 — the README documents the same recipe against
+    # /usr/local/etc/pam.d/sddm for the KDE case). tty logins go through the
+    # BASE login(1) service, whose PAM policy is /etc/pam.d/login (ports keep
+    # theirs under /usr/local/etc/pam.d/ — not this one). Idempotent: grep
+    # before append; degrade to a note if pam_xdg is somehow absent.
+    if _de_is_wayland "${desktop}"; then
+        try "Enabling pam_xdg for tty logins (XDG_RUNTIME_DIR)" \
+            chroot_sh 'if [ ! -e /usr/lib/pam_xdg.so.6 ] && [ ! -e /usr/lib/pam_xdg.so ]; then echo "pam_xdg not found in base — create XDG_RUNTIME_DIR manually (see POST-INSTALL notes)"; exit 0; fi; grep -q pam_xdg /etc/pam.d/login || printf "session\t\toptional\tpam_xdg.so\n" >> /etc/pam.d/login'
     fi
 
     # --- audio ----------------------------------------------------------------

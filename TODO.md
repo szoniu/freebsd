@@ -70,6 +70,42 @@ implemented. The items below are deferred, partial, or unverified-on-hardware.
   never a zvol — see DESIGN.md §"Swap" and the UFS/ZFS preamble emitters in
   `lib/bsdinstall.sh`.
 
+## Laptop daily-driver
+
+Context: `docs/DAILY-DRIVER-AUDIT.md` ("Poprawki — instalator"). Done in the 2026-07 pass:
+pam_xdg for tty-started Wayland sessions (`lib/desktop.sh` + POST-INSTALL note on
+XDG_RUNTIME_DIR), the Wayland session userland set (foot/fuzzel/mako/grim+slurp/swaylock/
+swaybg/portals per compositor/xdg-user-dirs/fonts; niri also gets xwayland-satellite), the
+new battery-gated `laptop` phase (`lib/laptop.sh`: powerd + Cx states, S3-probed suspend,
+backlight devfs.rules, ig4+iichid touchpad stack, ThinkPad acpi_ibm), `moused` only for
+`DESKTOP_TYPE=none`, the unified iwlwifi verdict (802.11 a/b/g/n/ac since 14.3; ax in
+progress), plus `tests/live-hw-check.sh` and `docs/LIVE-USB-CHECKLIST.md`.
+
+- [ ] **WiFi first-boot credentials screen.** Optional wizard screen for SSID+PSK:
+  write via `wpa_passphrase` into the target's `/etc/wpa_supplicant.conf` (0600) and
+  set `create_args_wlan0="country XX"` from the locale. Today the system boots with
+  wlan0 armed (Intel) but no credentials.
+- [ ] **webcamd for WEBCAM_DETECTED.** The variable is detected but dead — install
+  `multimedia/webcamd` + cuse, enable `webcamd_enable`, add the user to the `webcamd`
+  group. The "webcam is webcamd, handled elsewhere" comment in `tui/extra_packages.sh`
+  is not true today.
+- [ ] **SSD trim.** ZFS: `zpool set autotrim=on zroot` in finalize; UFS: add `trim`
+  to the fstab options for SSD targets.
+- [ ] **Bluetooth opt-in.** `hcsecd`/`sdpd` enable behind an explicit toggle + an honest
+  note: HID (mice/keyboards) mostly works, BT **audio does not**; AX201 BT is effectively
+  dead on FreeBSD.
+- [ ] **DEVICE_PROFILE=thinkpad.** Today ThinkPads get generic `acpi_ibm` in the laptop
+  phase; a full profile (kenv maker=LENOVO + product/version ThinkPad*) could add
+  per-model device.hints and notes (e.g. X1 Nano speaker pin quirks, TrackPoint).
+- [ ] **Optional "Claude Code" extras step.** `sysrc linux_enable=YES` + `pkg install
+  claude-code` + seed `~/.claude/settings.json` with `DISABLE_UPDATES=1` and
+  `USE_BUILTIN_RIPGREP=0` (+ `pkg install ripgrep`); fdescfs `linrdlnk` caveat — see
+  `docs/DAILY-DRIVER-AUDIT.md` "Claude Code na FreeBSD".
+- [ ] **SOF/DMIC audio warning heuristic.** `pciconf -lv` matching 'Smart Sound' →
+  POST-INSTALL warning that the internal DMIC microphone will never work (no SOF DSP
+  driver) and speakers may need snd_hda pin quirks. `tests/live-hw-check.sh` already
+  flags it pre-install; the installer itself does not yet.
+
 ## Release-version verification
 
 - [ ] **15.0/15.1 vs 14.x bsdinstall internals.** Re-verify on real media: the

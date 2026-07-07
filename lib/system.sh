@@ -120,13 +120,22 @@ _system_write_postinstall_notes() {
     if [[ "${WIFI_SUPPORTED:-1}" == "0" ]]; then
         wifi_note="WiFi: NO FreeBSD driver for the detected chip (${WIFI_VENDOR:-unknown} ${WIFI_DEVICE_ID:-}) — use wired/USB-Ethernet."
     elif [[ "${WIFI_VENDOR:-}" == "intel" ]]; then
-        wifi_note="WiFi: if_iwlwifi + wlan0 wired into rc.conf (WPA/SYNCDHCP). Add your SSID/PSK to /etc/wpa_supplicant.conf, then 'service netif restart wlan0' (or reboot). NB: iwlwifi tops out at 802.11ac — no WiFi 6 (ax)."
+        wifi_note="WiFi: if_iwlwifi + wlan0 wired into rc.conf (WPA/SYNCDHCP). Add your SSID/PSK to /etc/wpa_supplicant.conf, then 'service netif restart wlan0' (or reboot). NB: iwlwifi does 802.11 a/b/g/n/ac since 14.3 (LinuxKPI); ax/WiFi 6 is in progress (FreeBSD Foundation, 2026)."
     else
         wifi_note="WiFi: ${WIFI_VENDOR:-unknown} chip detected (a driver may exist) but NOT auto-configured — add the right module to kld_list + 'wlans_<dev>0=wlan0' + 'ifconfig_wlan0=\"WPA SYNCDHCP\"' by hand (FreeBSD Handbook ch. Wireless)."
     fi
 
     local be_note="ZFS boot environments: 'bectl list' to view, 'bectl activate freebsd-install-baseline' to roll back to the pristine install."
     [[ "${fs}" != "zfs" ]] && be_note="UFS root: boot environments (bectl) are not available on this filesystem."
+
+    # XDG_RUNTIME_DIR for tty-started Wayland sessions: desktop_install
+    # (lib/desktop.sh) wires pam_xdg ONLY when the module exists in base and
+    # degrades to a note otherwise — so phrase this conditionally instead of
+    # claiming the PAM line is always there, and give the manual fallback.
+    local xdg_note=""
+    if _de_is_wayland "${de}"; then
+        xdg_note="- Wayland session (${de}) starts from a tty login (no display manager). XDG_RUNTIME_DIR=/var/run/user/<uid> is created at login by pam_xdg (FreeBSD base) — the installer appends 'session optional pam_xdg.so' to /etc/pam.d/login when pam_xdg is present in base. Verify: grep pam_xdg /etc/pam.d/login — if missing (pam_xdg absent from this base), create the dir yourself before starting the compositor: mkdir -p /var/run/user/<uid>, chown it to your user, chmod 700 (e.g. from your shell profile)."
+    fi
 
     einfo "Writing /root/POST-INSTALL-NOTES.txt..."
     # Body is built on the host and fed to the target via a quoted heredoc on the
@@ -155,6 +164,7 @@ System notes
 - Privilege escalation uses ${priv} (members of the 'wheel' group).
 - Locale is set via an /etc/login.conf class (FreeBSD has no /etc/locale.conf);
   cap_mkdb /etc/login.conf was run so the change is live.
+${xdg_note}
 
 Device
 ------

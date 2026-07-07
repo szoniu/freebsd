@@ -186,8 +186,10 @@ instalatorze wymazującym dysk. **Dodanie = jednolinijkowy wpis** (jak Mango: `D
 ścieżka Wayland tty+seatd, `_de_packages` → komponenty cosmic-*) **gdy `cosmic-session` + reszta
 sesji trafią do binarnego pkg dla FreeBSD:14/15:amd64.**
 
-**Prereq dowolny graficzny:** `pkg install xorg drm-kmod` → `sysrc dbus_enable=YES
-moused_enable=YES` → `pw groupmod video -m USER`. **PipeWire to USER service** (brak
+**Prereq dowolny graficzny:** `pkg install xorg drm-kmod` → `sysrc dbus_enable=YES`
+→ `pw groupmod video -m USER`. **`moused` TYLKO przy `DESKTOP_TYPE=none`** (konsola) —
+pod desktopem input obsługuje libinput/kompozytor, a moused rysowałby drugi, rozjechany
+kursor. **PipeWire to USER service** (brak
 `pipewire_enable`; XDG autostart) — `pkg install pipewire wireplumber pipewire-spa-oss`. Brak
 systemd-logind; `elogind` i `seatd` konfliktują → wybierz **seatd**.
 
@@ -221,9 +223,9 @@ encrypted.
 
 ### Microsoft Surface (best-effort)
 
-**WiFi WERDYKT (chip-dependent):** AX200/AX201 (Go 2/3, Pro 7/8) działają via `iwlwifi` **tylko
-802.11 a/b/g**; QCA6174 (orig Go, wiele Pro 4-6) — `ath10k` disconnected, **brak WiFi → USB
-dongle**.
+**WiFi WERDYKT (chip-dependent):** AX200/AX201 (Go 2/3, Pro 7/8) działają via `iwlwifi` —
+**802.11 a/b/g/n/ac od 14.3 (LinuxKPI)**; ax/Wi-Fi 6 w toku (FreeBSD Foundation, 2026);
+QCA6174 (orig Go, wiele Pro 4-6) — `ath10k` disconnected, **brak WiFi → USB dongle**.
 
 | Komponent | Status | Severity |
 |---|---|---|
@@ -253,7 +255,7 @@ pw groupmod _seatd -m "$USERNAME"     # Wayland seat (CZĘSTO POMIJANE — compo
 
 **rc.conf fragment (desktop + laptop):**
 ```sh
-sysrc dbus_enable="YES" seatd_enable="YES" moused_enable="YES"
+sysrc dbus_enable="YES" seatd_enable="YES"   # moused: tylko DESKTOP_TYPE=none (patrz §4)
 sysrc ntpd_enable="YES" ntpd_sync_on_start="YES"
 sysrc powerd_enable="YES" powerd_flags="-a hadp -b adp"
 sysrc kld_list+="amdgpu"            # += NIE druga przypisanie (nadpisze!)

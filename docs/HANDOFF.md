@@ -33,7 +33,7 @@ Cztery decyzje architektoniczne (odpowiedzi użytkownika):
 ### Fazy (CHECKPOINTS) → funkcje
 `preflight`(preflight_checks) → `bsdinstall`(bsdinstall_run) → `mount_target`(bsdinstall_mount_target)
 → `gpu`(gpu_install) → `desktop`(desktop_install) → `device_quirks`(device_quirks_apply)
-→ `extras`(install_extras) → `finalize`(system_finalize).
+→ `laptop`(laptop_setup_apply) → `extras`(install_extras) → `finalize`(system_finalize).
 
 ### Ekrany wizarda (kolejność w install.sh)
 welcome, preset_load, hw_detect, disk_select, filesystem_select, swap_config, network_config,
@@ -71,6 +71,13 @@ Moduły: `lib/gpu.sh`(gpu_install), `lib/desktop.sh`(desktop_install+install_ext
 `lib/system.sh`(system_finalize), `lib/umpc.sh`(device_quirks_apply), `lib/config.sh`(validate_config).
 Ekrany TUI: wszystkie 14. Testy: `test_hardware`, `test_bsdinstall`, `test_config`, `test_validate`.
 Docs: `README.md`, `CLAUDE.md`, `TODO.md`.
+
+### DODANE PÓŹNIEJ (faza laptop, 2026-07)
+- `lib/laptop.sh` — faza `laptop` (gated na `BATTERY_DETECTED`): powerd/Cx, suspend S3 (lid tylko przy
+  desktopie; `/dev/acpi` dla grupy `operator` przez devfs.conf), backlight devfs.rules, touchpad ig4+iichid,
+  ThinkPad acpi_ibm. Diagnostyka read-only: `tests/live-hw-check.sh` (**POSIX sh** — leci na gołym live
+  medium, NIE wprowadzać bashizmów). Docs: `LIVE-USB-CHECKLIST.md` (runbook per maszyna),
+  `DAILY-DRIVER-AUDIT.md` (werdykty kandydatów).
 
 **Weryfikacja integracji (PASS):**
 - `bash -n` na 38 plikach `.sh` — czysto.
