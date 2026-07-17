@@ -19,6 +19,44 @@ implemented. The items below are deferred, partial, or unverified-on-hardware.
   gap. `efibootmgr` on FreeBSD takes `-l /path/to/loader.efi` (NOT Linux
   `--disk/--part`) — re-derive the invocation, don't port the Linux one.
 
+  **Research 2026-07 (sibling-parity audit — why it did NOT port 1:1):**
+  - **Detection is already done and matches the siblings.** `lib/hardware.sh`
+    (`detect_installed_oses`/`detect_esp`, `DETECTED_OSES[]`, `WINDOWS_ESP`,
+    `ESP_PARTITIONS`, serialized into a preset var) mounts partitions and reads
+    the GPT type / `bootmgfw.efi` — the same manual-scan approach the Linux
+    family uses (they do NOT use os-prober for detection either; os-prober only
+    runs at GRUB-config time). Today that output dead-ends at the `ERASE` safety
+    gate in `tui/disk_select.sh` — it is never reused for install. No detection
+    work is missing.
+  - **The two real gaps are the partitioner and the boot entry, not detection.**
+    Siblings own their partitioner (`disk_plan_dualboot` + `sfdisk --append`
+    into free space, `_shrink_wizard` → `ntfsresize`/`resize2fs`/`btrfs resize`);
+    we deliberately delegate partitioning to `bsdinstall`, which only does
+    whole-disk. That delegation is the port's foundation — reworking it is what
+    makes this expensive, not a missing feature.
+  - **Bootloader model: follow porteux, not void/gentoo.** GRUB+os-prober does
+    not port (FreeBSD has no GRUB and `loader.efi` doesn't probe foreign OSes).
+    The in-family precedent is **porteux**, which dual-boots WITHOUT os-prober:
+    shared ESP + a separate UEFI firmware entry per OS (`efibootmgr`), OS choice
+    made in the firmware boot menu (no unified chainload menu). FreeBSD maps onto
+    this cleanly — `lib/system.sh` already pins a "FreeBSD" UEFI entry; it just
+    must stop being the *only* entry (preserve the Windows/Linux entry) and the
+    ESP must be reused, not recreated.
+  - **Recommended path — two steps, not one big feature:**
+    - **C (cheap, honest UX first):** replace the bare `ERASE` gate with a screen
+      that says the installer does no in-place shrink — free the space yourself,
+      or the disk is sacrificed. A few lines; stops silently implying whole-disk
+      is the only option.
+    - **A (real dual-boot, UFS profile only):** user pre-shrinks; installer adds a
+      partial-disk path (skip `gpart destroy -F`, emit a `PARTITIONS` preamble
+      targeting existing free space), reuses `WINDOWS_ESP`, and adds the FreeBSD
+      UEFI entry alongside Windows. ZFS-auto stays whole-disk (`ZFSBOOT_DISKS`
+      can't target free space) — ZFS dual-boot would need a hand-rolled preamble,
+      out of scope for A.
+    - **B (full automatic shrink like the siblings): rejected** — needs in-base FS
+      shrinkers absent from the memstick and abandoning `bsdinstall` for manual
+      `gpart`; that is rewriting the port's foundation.
+
 ## Resume / idempotency
 
 - [ ] **Cross-reboot disk-scan resume + config inference.** Today resume is
