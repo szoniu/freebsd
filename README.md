@@ -10,11 +10,20 @@ Wierny port **rodziny instalatorów szoniu** (bliźniacze: `alpine`, `chimeraos`
 
 > Pełne uzasadnienie każdej decyzji specyficznej dla FreeBSD: [`docs/DESIGN.md`](docs/DESIGN.md).
 > Runbook testu na żywym sprzęcie: [`docs/LIVE-TEST.md`](docs/LIVE-TEST.md). Status: [`docs/HANDOFF.md`](docs/HANDOFF.md).
-> **Zanim wymażesz dysk:** checklist sprzętowy na live USB — [`docs/LIVE-USB-CHECKLIST.md`](docs/LIVE-USB-CHECKLIST.md) + `tests/live-hw-check.sh` (sekcja [„Sprawdź sprzęt"](#5-zalecane-sprawdź-sprzęt-zanim-wymażesz-dysk) niżej). Co realnie działa na FreeBSD jako daily driver: [`docs/DAILY-DRIVER-AUDIT.md`](docs/DAILY-DRIVER-AUDIT.md).
+> **Zanim wymażesz dysk:** checklist sprzętowy na live USB — [`docs/LIVE-USB-CHECKLIST.md`](docs/LIVE-USB-CHECKLIST.md) + `tests/live-hw-check.sh` (krok [5](#5-sprawdź-sprzęt-zanim-wymażesz-dysk) niżej). Co realnie działa na FreeBSD jako daily driver: [`docs/DAILY-DRIVER-AUDIT.md`](docs/DAILY-DRIVER-AUDIT.md).
 
 ## Krok po kroku (od zera do działającego systemu)
 
-> **Gdzie fizycznie, skąd zdalnie.** Kroki **1–3b wykonujesz przy maszynie** (klawiatura + ekran targetu) — to kura-i-jajko: bez sieci i działającego `sshd` nie ma jak się połączyć. Od **kroku 4 (bootstrap + uruchomienie instalatora) możesz już działać przez SSH** z innej maszyny — montowanie tmpfs na `/usr/local` i `/tmp` nie rusza działającego `sshd` (klucze/config są w `/etc`), więc sesja nie pada. Jeśli nie chcesz zdalnie — pomiń §3b i zrób wszystko na targecie; też zadziała.
+> **Gdzie fizycznie, skąd zdalnie.** Kroki **1–3b wykonujesz przy maszynie** (klawiatura + ekran targetu) — to kura-i-jajko: bez sieci i działającego `sshd` nie ma jak się połączyć. Od **kroku 4 (bootstrap) możesz już działać przez SSH** z innej maszyny — montowanie tmpfs na `/usr/local` i `/tmp` nie rusza działającego `sshd` (klucze/config są w `/etc`), więc sesja nie pada. Jeśli nie chcesz zdalnie — pomiń §3b i zrób wszystko na targecie; też zadziała.
+
+### 0. Zanim zaczniesz (planowanie — przy biurku, nie przy targecie)
+
+Cztery rzeczy, które musisz załatwić PRZED włożeniem pendrive'a, bo przy targecie będzie za późno:
+
+1. **Cały dysk docelowy zostanie wymazany.** v0.1 robi wyłącznie whole-disk auto layout — dual-boot side-by-side jest **niepodłączony** (szczegóły: [Znane ograniczenia](#znane-ograniczenia--jeszcze-niewspierane)). Jeśli na maszynie jest system, którego nie chcesz stracić (Linux, Windows — łącznie z jego aktywacją), **zrób backup teraz**. Instalator wykrywa Windows/ESP, ale przy `nonInteractive=YES` skasuje je bez drugiego pytania.
+2. **Laptop bez portu RJ45? Przygotuj przejściówkę USB-Ethernet** (`ure`/`cdce`) albo kabel do USB-tetheringu z telefonu. Bootstrap instalacji **wymaga sieci kablowej** — WiFi na live media nie jest wspieraną ścieżką, nawet na chipach Intel, które w zainstalowanym systemie działają (WiFi konfigurujesz dopiero w kroku [7](#7-po-pierwszym-boocie)).
+3. **Secure Boot → wyłącz w firmware.** FreeBSD nie ma odpowiednika MOK/shim z rodziny Linux; przy włączonym Secure Boot loader w ogóle się nie uruchomi.
+4. **Sprawdź, czego FreeBSD na Twoim laptopie NIE potrafi** — zanim zainwestujesz wieczór: mikrofon wewnętrzny (DMIC/SOF) i Bluetooth-audio martwe, WiFi max 802.11ac, docki Thunderbolt nie działają, suspend tylko przy S3 w firmware. Werdykty per maszyna: [`docs/DAILY-DRIVER-AUDIT.md`](docs/DAILY-DRIVER-AUDIT.md).
 
 ### 1. Przygotuj bootowalny pendrive (memstick)
 
@@ -68,7 +77,7 @@ Zobaczysz partycje typu `efi` i `FreeBSD_Install` — wtedy pendrive jest gotowy
 ### 2. Bootuj z pendrive
 
 - Wejdź do BIOS/UEFI (zwykle F2, F12, Del przy starcie), ustaw boot z USB.
-- **Secure Boot — WYŁĄCZ.** FreeBSD nie ma odpowiednika MOK/shim z rodziny Linux; przy włączonym Secure Boot loader się nie uruchomi.
+- **Secure Boot wyłączony?** (krok 0) — przy włączonym loader się nie uruchomi.
 - Wybierz **UEFI** (nie Legacy/CSM), chyba że celowo instalujesz w trybie BIOS.
 - **Snapdragon / ARM64** (Surface Pro 11. gen, Laptop 7. gen): instalator wykryje i **ODMÓWI** — jest tylko amd64.
 
@@ -84,7 +93,7 @@ W menu bootloadera FreeBSD **nie wciskaj nic** — pozwól odliczyć (opcja 1, M
 
 ### 3. Połącz się z internetem — KABLEM
 
-> **Ostrzeżenie WiFi — przeczytaj najpierw.** Na **GPD Pocket 4** i kilku modelach **Microsoft Surface** wbudowany chip WiFi **nie ma sterownika FreeBSD** (tabele niżej). Na tych maszynach **nie postawisz** WiFi na live media — użyj **kabla Ethernet lub przejściówki USB-Ethernet** (albo USB-tether z telefonu). Zaplanuj kabel.
+> **Ostrzeżenie WiFi — przeczytaj najpierw.** Na **GPD Pocket 4** i kilku modelach **Microsoft Surface** wbudowany chip WiFi **nie ma sterownika FreeBSD** (tabele niżej). Na tych maszynach **nie postawisz** WiFi na live media — użyj **kabla Ethernet lub przejściówki USB-Ethernet** (albo USB-tether z telefonu). Laptop bez RJ45: przejściówka z kroku 0. WiFi w **zainstalowanym** systemie (chipy Intel dostają je automatycznie) konfigurujesz w kroku [7](#7-po-pierwszym-boocie).
 
 Jako `root` w Live Shell:
 
@@ -92,10 +101,6 @@ Jako `root` w Live Shell:
 ifconfig -l            # znajdź interfejs
 dhclient em0           # podstaw swój: igb0 / re0 / ure0 / ...
 ```
-
-> **Po instalacji — WiFi w zainstalowanym systemie.** Na zwykłym laptopie (np. **Intel AX201/AX211** jak w HP ProBook G8) chip ma sterownik. Instalator wykrywa go i — dla **Intel (`iwlwifi`)** — **sam wpisuje `if_iwlwifi` + `wlan0` (WPA/SYNCDHCP) do `rc.conf`** targetu oraz zostawia szablon `/etc/wpa_supplicant.conf`. Po pierwszym boocie uzupełniasz tam SSID/hasło i `service netif restart wlan0`. (`iwlwifi` = **802.11 a/b/g/n/ac od 14.3** przez LinuxKPI; ax/Wi-Fi 6 w toku — FreeBSD Foundation, 2026.) Realtek/Atheros instalator wykrywa, ale konfigurację zostawia w notatkach POST-INSTALL (nazwa modułu jest niejednoznaczna: rtw88 vs rtw89, ath vs ath10k). **Podczas samej instalacji i tak używaj kabla.**
-
-> **Sieć przewodowa w zainstalowanym systemie działa od pierwszego bootu** — instalator wpisuje do `rc.conf` `ifconfig_DEFAULT="DHCP"`, więc dowolny interfejs Ethernet bez własnego configu dostaje DHCP, bez podawania nazwy `em0`/`igb0`. **Uwaga na KDE:** aplet sieci Plasmy (`plasma-nm`) bywa „ślepy" i pokazuje *brak sieci*, bo FreeBSD nie używa NetworkManagera — sieć stoi na `rc.conf`. To **kosmetyka**: sprawdź realną łączność przez `ping`, a WiFi konfiguruj przez `wpa_supplicant`/`rc.conf` (lub `service netif restart wlan0`), nie przez ikonkę. Doraźnie: `doas dhclient <iface>`.
 
 ### 3b. (Opcjonalnie) Zdalny podgląd przez SSH
 
@@ -118,7 +123,7 @@ ifconfig em0 | grep 'inet '                          # odczytaj IP targetu (pods
 
 Z maszyny dev: `ssh root@<IP-targetu>`. **Odpalaj instalator w `tmux`** (doinstaluj `tmux` w kroku 4, potem `tmux`), żeby zerwane SSH nie ubiło instalacji — po rozłączeniu wrócisz przez `tmux attach`. Z drugiej zakładki tmux podglądasz log: `tail -f /tmp/freebsd-installer.log`.
 
-### 4. Bootstrap warstwy shell + uruchomienie instalatora
+### 4. Bootstrap warstwy shell + klon repo
 
 Live media FreeBSD ma root **tylko do odczytu**, tylko `/bin/sh` (ash, *nie* bash), `pkg` niezbootstrapowany i pusty/RO `/usr/local`. Trzeba położyć zapisywalną nakładkę i zbootstrapować warstwę shell:
 
@@ -141,10 +146,11 @@ pkg bootstrap -fy && pkg update -f && pkg install -y bash gum git tmux
 # 4) Środowisko konsoli dla gum na vt(4):
 export TERM=xterm-256color LANG=en_US.UTF-8 LC_CTYPE=en_US.UTF-8
 
-# 5) Klon i uruchomienie:
+# 5) Klon repo:
 git clone https://github.com/szoniu/freebsd.git /tmp/installer
-exec bash /tmp/installer/install.sh
 ```
+
+> **NIE uruchamiaj jeszcze instalatora.** Najpierw krok 5 — read-only diagnostyka sprzętu. Dysk na tym etapie jest wciąż nietknięty.
 
 Pułapki:
 
@@ -154,7 +160,7 @@ Pułapki:
 - Konsola vt(4) renderuje 16 kolorów; `gum` degraduje się łagodnie, ale wymaga **locale UTF-8** (krok 4).
 - **Repo pkg zablokowane, ale GitHub działa?** Statyczna binarka `gum` dla FreeBSD/amd64 jest bundlowana w `data/gum.tar.gz` (asset `gum_0.17.0_Freebsd_x86_64.tar.gz`, uwaga na kapitalizowane `Freebsd`); instalator wypakowuje ją sam, więc twardo potrzebujesz tylko `bash` + `git`.
 
-### 5. (Zalecane) Sprawdź sprzęt, zanim wymażesz dysk
+### 5. Sprawdź sprzęt, zanim wymażesz dysk
 
 Repo zawiera **POSIX-owy skrypt diagnostyczny** do uruchomienia z live shella (działa na gołym `/bin/sh`, przed bootstrapem basha — wystarczy krok 3 z siecią, żeby sklonować repo, albo pendrive z wgraną kopią):
 
@@ -167,7 +173,19 @@ Skrypt wypisuje PASS/FAIL/INFO per komponent: **GPU** (klasa/vendor → który d
 
 Werdykty per maszyna-kandydat (ProBook 450 G8 — przetestowany w polu; ThinkPad X1 Nano Gen 1 — wymaga BIOS ≥1.43 + Sleep="Linux"; HP Elite Dragonfly) i interpretacja wyników: [`docs/LIVE-USB-CHECKLIST.md`](docs/LIVE-USB-CHECKLIST.md).
 
-### Inne tryby uruchomienia
+Twardy FAIL (exit 1 — np. WiFi bez sterownika, brak S3, którego potrzebujesz)? To ostatni moment na bezbolesny odwrót — dysk jest wciąż nietknięty.
+
+### 6. Uruchom instalator
+
+```sh
+bash /tmp/installer/install.sh
+```
+
+(Przez SSH: najpierw `tmux`, w nim instalator — patrz §3b. Po zerwanej sesji: `tmux attach`; po padzie instalatora: `bash /tmp/installer/install.sh --resume`.)
+
+Wizard poprowadzi Cię przez ekrany: sprzęt → dysk → system plików (ZFS/UFS) → swap → sieć → locale → GPU → **desktop** → user → dodatki → **summary**. Nic nie jest zapisywane na dysk aż do summary — instalacja rusza dopiero po wpisaniu `YES` i odliczeniu. Przy wyborze desktopu przeczytaj caveaty FreeBSD w tabeli [Menu desktopów](#menu-desktopów) (najważniejszy: **KDE = sesja X11**, nie Wayland).
+
+Wszystkie tryby uruchomienia:
 
 ```sh
 bash install.sh                  # pełny przebieg: wizard, potem instalacja
@@ -179,6 +197,23 @@ bash install.sh --config FILE    # użyj konkretnego pliku konfiguracji
 bash install.sh --force          # kontynuuj mimo nieudanych prerequisite-checków
 bash install.sh --non-interactive  # przerwij na każdym błędzie (bez menu recovery)
 ```
+
+Po komunikacie o zakończeniu: wyjmij pendrive i zrestartuj do zainstalowanego systemu.
+
+### 7. Po pierwszym boocie
+
+Kolejność nieprzypadkowa — najpierw notatki, potem sieć, potem desktop:
+
+1. **Zaloguj się i przeczytaj `/root/POST-INSTALL-NOTES.txt`** (jako root: `su -`, albo `doas cat /root/POST-INSTALL-NOTES.txt`). Instalator zapisuje tam notatki **konkretnie dla Twojej maszyny**: stan WiFi, suspend, backlight, touchpad, quirki urządzenia. Ten plik > ta sekcja.
+2. **WiFi (chipy Intel — AX200/AX201/AX211 itp.):** instalator już wpisał `if_iwlwifi` + `wlan0` (WPA/SYNCDHCP) do `rc.conf` i zostawił szablon **`/etc/wpa_supplicant.conf`** (0600). Uzupełnij w nim SSID i hasło, potem:
+   ```sh
+   service netif restart wlan0
+   ```
+   `iwlwifi` = **802.11 a/b/g/n/ac od 14.3** (LinuxKPI); ax/Wi-Fi 6 w toku (FreeBSD Foundation, 2026) — realnie ~100–200 Mbps, to norma, nie usterka. **Realtek/Atheros**: wykryte, ale nie auto-skonfigurowane (nazwa modułu niejednoznaczna: rtw88 vs rtw89, ath vs ath10k) — przepis masz w POST-INSTALL-NOTES.
+3. **Sieć przewodowa działa od razu** — instalator wpisał `ifconfig_DEFAULT="DHCP"`, więc dowolny interfejs Ethernet bez własnego configu dostaje DHCP. Doraźnie: `doas dhclient <iface>`.
+4. **KDE: w SDDM wybierz sesję „Plasma (X11)"**, nie Wayland — sesja Wayland z SDDM na FreeBSD nie wstaje (szczegóły i obejście z tty: nota pod [Menu desktopów](#menu-desktopów)). **Aplet sieci Plasmy bywa „ślepy"** i pokazuje *brak sieci*, bo FreeBSD nie używa NetworkManagera — sieć stoi na `rc.conf`. To kosmetyka: łączność weryfikuj przez `ping`, WiFi konfiguruj przez `wpa_supplicant`/`rc.conf`, nie przez ikonkę.
+5. **ZFS: masz już baseline** — instalator utworzył boot environment `freebsd-install-baseline` (powrót do stanu świeżej instalacji = `bectl activate freebsd-install-baseline` + reboot). Przed każdą większą zmianą systemu rób własny: `bectl create <nazwa>` — patrz [Boot environments](#boot-environments-zfs-rollback-jako-feature).
+6. **(Opcjonalnie) dotfiles:** `git clone https://github.com/szoniu/dotfiles.git ~/dotfiles && cd ~/dotfiles && ./bootstrap.sh` — wizard ma pełną gałąź FreeBSD (pkg), łącznie z Claude Code przez Linuxulator i przewodnikiem aktualizacji 14.x→15.x.
 
 ## Menu desktopów
 
@@ -340,4 +375,3 @@ docs/LIVE-USB-CHECKLIST.md — checklist sprzętowy przed instalacją, per maszy
 docs/DAILY-DRIVER-AUDIT.md — audyt: co działa na FreeBSD jako desktop daily driver (2026-07)
 docs/HANDOFF.md   — status / co podłączone vs TODO
 ```
-</content>
