@@ -69,6 +69,29 @@ Przed czymkolwiek (szczegóły: [DAILY-DRIVER-AUDIT.md](DAILY-DRIVER-AUDIT.md) �
 - [ ] Audio + SOF WARN: test głośników/jacka na live.
 - Sieć do instalacji: brak RJ45 — USB-Ethernet.
 
+## ASUS ZenBook UX425EA („chimera") — rezerwa
+
+Ten sam krzem co ProBook #1 (i5-1135G7 Tiger Lake + Iris Xe + AX201), więc werdykty
+grafiki/WiFi dziedziczy z jego field-testu. Różnice, które bolą:
+
+- **⚠️ Dual-boot Chimera Linux (główny system) + Windows 11 na jednym NVMe 512 GB** —
+  instalator robi TYLKO whole-disk: instalacja = utrata OBU systemów (w tym aktywacji
+  Win11; powrót tylko przez cloud recovery). Backup wszystkiego PRZED startem.
+- **Brak RJ45** — bootstrap wyłącznie przez przejściówkę USB-Ethernet (`ure`/`cdce`)
+  albo USB-tether z telefonu. Kup/pożycz zanim ruszysz z domu.
+- [ ] `sh live-hw-check.sh --probe-kmods` — oczekiwane: Iris Xe PASS (na 15.1 przy
+  GPU HANG → drm-66-kmod), AX201 PASS (iwlwifi, a/b/g/n/ac od 14.3; BT martwy),
+  SOF WARN (DMIC — mikrofon wewnętrzny martwy na zawsze).
+- [ ] **S3 (unknown!):** `sysctl hw.acpi.supported_sleep_state` — ASUS-y z ery TGL
+  bywają s0ix-only; brak S3 = **zero suspendu** do wejścia s2idle (~15.2). To może być
+  powód, żeby zostać przy ProBooku.
+- [ ] **Głośniki** (unknown): `cat /dev/sndstat` + test playback (jack powinien działać).
+- [ ] **Gesty**: probe-kmods + libinput debug-events → `GESTURE_SWIPE_BEGIN` na 3 palce
+  (touchpad ELAN po I2C-HID — rokuje, brak świadectwa). **NumberPad w touchpadzie nie
+  zadziała** (ASUS-owy sterownik tylko w Linuksie) — licz się z tym.
+- [ ] Po pozytywnym teście: hw-probe → bsd-hardware.info + aktualizacja
+  `homelab/inventory/hardware/asus-zenbook-ux425ea.yaml` (sekcja `system:`).
+
 ## Wspólne (każda maszyna, po czystym przejściu live-hw-check)
 
 1. `kldload i915kms` na live — konsola musi przełączyć się bez paniki; dopiero potem instalacja.
