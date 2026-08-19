@@ -78,9 +78,12 @@ set_common_config() {
     SWAP_TYPE="partition"
     SWAP_SIZE_MIB="4096"
     DIST_SITE=""
+    # BYTES, never "4G" — and a DOTTED loader.conf knob, which is exactly the
+    # case sysrc(8) refuses, so the generated script must not use sysrc for it.
+    ARC_MAX_BYTES="5614422698"
     export TARGET_DISK HOSTNAME TIMEZONE KEYMAP LOCALE LOCALE_CLASS
     export USERNAME FULLNAME USER_GROUPS PRIV_TOOL
-    export ROOT_PASSWORD_HASH USER_PASSWORD_HASH SWAP_TYPE SWAP_SIZE_MIB DIST_SITE
+    export ROOT_PASSWORD_HASH USER_PASSWORD_HASH SWAP_TYPE SWAP_SIZE_MIB DIST_SITE ARC_MAX_BYTES
 }
 
 # ---------------------------------------------------------------------------
@@ -122,6 +125,17 @@ assert_contains "ZFSBOOT_DISKS uses target"  'ZFSBOOT_DISKS="nda0"' "${BSDINSTAL
 assert_contains "setup-script #!/bin/sh split" "#!/bin/sh"        "${BSDINSTALL_SCRIPT}"
 assert_contains "ROOTPASS_ENC line present"  "ROOTPASS_ENC"       "${BSDINSTALL_SCRIPT}"
 assert_contains "ZFS swap token (4g) emitted" 'ZFSBOOT_SWAP_SIZE="4g"' "${BSDINSTALL_SCRIPT}"
+
+# (2a) No sysrc call may carry a DOTTED variable name: sysrc(8) validates the
+# name as a shell identifier and dies with "name contains characters not allowed
+# in shell", killing the phase. Dotted knobs must go through _loader_set. This
+# catches the whole class, not just vfs.zfs.arc_max. (The regex anchors on the
+# name right before '=', so `sysrc -f /boot/loader.conf zfs_load=YES` — a path
+# with a dot but an undotted NAME — is correctly not a match.)
+assert_eq "no sysrc with a dotted variable name" "0" \
+    "$(grep -cE 'sysrc[^=]*[[:space:]][A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_.]*=' "${BSDINSTALL_SCRIPT}" || true)"
+assert_contains "arc_max written via _loader_set" "_loader_set vfs.zfs.arc_max" "${BSDINSTALL_SCRIPT}"
+assert_contains "undotted zfs_load still uses sysrc" "sysrc -f /boot/loader.conf zfs_load=YES" "${BSDINSTALL_SCRIPT}"
 
 # (3) password hash reaches the file safely quoted via stdin, never as a bare pw arg.
 # The user hash is piped: `printf %s <hash> | pw usermod -n <user> -H 0`.

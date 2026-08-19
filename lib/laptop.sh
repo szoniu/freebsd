@@ -161,8 +161,7 @@ _laptop_touchpad() {
     einfo "Enabling I2C touchpad stack (ig4 + iichid; modules are inert without the hardware)"
     _gpu_kld_list_append "ig4"
     _gpu_kld_list_append "iichid"
-    try "Enabling psm synaptics extensions (loader.conf)" \
-        chroot_exec sysrc -f /boot/loader.conf hw.psm.synaptics_support=1
+    chroot_loader_conf_set "hw.psm.synaptics_support" "1"
 }
 
 # _laptop_thinkpad — acpi_ibm(4) gives ThinkPads their hotkeys, fan readouts and

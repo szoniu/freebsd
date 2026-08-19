@@ -292,8 +292,7 @@ _quirk_surface() {
 
     # USB-HID quirk handling needs the usbhid stack enabled in the loader. This
     # lives in loader.conf (read by the loader before the kernel), NOT rc.conf.
-    try "Surface: loader.conf hw.usb.usbhid.enable=1" \
-        chroot_exec sysrc -f /boot/loader.conf 'hw.usb.usbhid.enable=1'
+    chroot_loader_conf_set "hw.usb.usbhid.enable" "1"
 
     _quirk_note_append <<NOTE
 

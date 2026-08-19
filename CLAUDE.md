@@ -76,6 +76,7 @@ lib/                    — Library modules (SOURCED, never executed)
 │                         bsdinstall_run, bsdinstall_mount_target, _mib_to_size,
 │                         _resolve_part_by_type
 ├── chroot.sh           — chroot_exec / chroot_sh / chroot_pkg / chroot_teardown (all DRY_RUN-aware)
+│                         + chroot_loader_conf_set (dotted loader.conf knobs — sysrc refuses dots)
 ├── gpu.sh              — gpu_install: drm-kmod + AMD Phoenix firmware flavors + kld_list +
 │                         video group (OUTER process, via chroot_*)
 ├── desktop.sh          — desktop_install: X11/Wayland prereqs, DE pkg, display manager,
@@ -122,7 +123,7 @@ docs/                   — DESIGN.md (the research brief / spec) + HANDOFF.md (
                           live checklist) + DAILY-DRIVER-AUDIT.md (laptop candidate verdicts)
 presets/                — example.conf
 tests/                  — Standalone tests (test_config / test_hardware / test_checkpoint /
-                          test_validate / test_bsdinstall; shellcheck.sh); live-hw-check.sh
+                          test_validate / test_bsdinstall / test_loader_conf; shellcheck.sh); live-hw-check.sh
                           (POSIX sh — runs on the bare live medium, do NOT introduce bashisms)
 hooks/                  — before_install.sh.example / after_install.sh.example
 ```
@@ -231,6 +232,12 @@ exit must not mask it). Use `einfo/ewarn/eerror/elog`; `die` aborts.
 
 - **`pkg`, not xbps/portage/apt.** `pkg bootstrap -f` → `pkg update -f` → `pkg install -y`.
   Non-interactive via `ASSUME_ALWAYS_YES=yes` (set by `chroot_pkg`). No mirror-picker screen.
+- **`sysrc` REFUSES dotted variable names.** `sysrc -f /boot/loader.conf vfs.zfs.arc_max=…`
+  dies with "name contains characters not allowed in shell" and aborts the phase — even though
+  dotted knobs are exactly what `loader.conf` holds. Write those with `chroot_loader_conf_set`
+  (`lib/chroot.sh`) or, inside the generated setup script, `_loader_set`; both rewrite the line
+  in place so a `--resume` cannot accumulate duplicates. Undotted names (`zfs_load`) still go
+  through `sysrc`. Regression guard: `tests/test_loader_conf.sh`.
 - **`sysrc`/`rc.conf`, not runit/systemd.** Enable services with `sysrc foo_enable=YES`. There
   is no `/var/service` symlink dance. Use `sysrc -f /boot/loader.conf …` only for boot-critical
   knobs.
@@ -319,6 +326,7 @@ bash tests/test_hardware.sh      # Hardware detection / parsing
 bash tests/test_checkpoint.sh    # Checkpoint set/reached/validate/migrate
 bash tests/test_validate.sh      # validate_config() pre-install safety gate
 bash tests/test_bsdinstall.sh    # bsdinstall script generation (ZFS/UFS/GELI, injection safety)
+bash tests/test_loader_conf.sh   # loader.conf writes (dotted knobs, idempotence, no dotted sysrc)
 bash tests/shellcheck.sh         # Static analysis (needs shellcheck)
 ```
 

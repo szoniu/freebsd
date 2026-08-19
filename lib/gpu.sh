@@ -129,8 +129,7 @@ gpu_install() {
             # ONE vendor that uses loader.conf — and only for the modeset tunable
             # (hw.nvidiadrm.modeset=1), not to load the module. No Wayland.
             try "Install NVIDIA driver" chroot_pkg nvidia-driver
-            try "Enable NVIDIA DRM modeset (loader.conf)" \
-                chroot_sh "sysrc -f /boot/loader.conf hw.nvidiadrm.modeset=1"
+            chroot_loader_conf_set "hw.nvidiadrm.modeset" "1"
             _gpu_kld_list_append "nvidia-modeset"
             ;;
         none|unknown|"")

@@ -26,6 +26,34 @@ chroot_sh() {
     chroot "${MOUNTPOINT}" /bin/sh -c "${script}"
 }
 
+# chroot_loader_conf_set — set a /boot/loader.conf tunable on the target WITHOUT
+# sysrc. sysrc(8) validates the variable name as a shell identifier and refuses
+# anything with a dot ("name contains characters not allowed in shell"), even
+# though dotted knobs are exactly what loader.conf is made of — that killed 4 of
+# our 5 loader.conf writes (vfs.zfs.arc_max, hw.psm.synaptics_support,
+# hw.usb.usbhid.enable, hw.nvidiadrm.modeset). Undotted names like zfs_load do
+# work through sysrc and are left alone.
+#
+# Idempotent by rewrite, not by append-if-missing: any existing line for the same
+# knob is dropped and the new one appended, so a --resume (or a changed value
+# between runs) leaves exactly one line instead of accumulating duplicates.
+# The name's dots are escaped before they reach grep, otherwise `.` would match
+# any character and a knob like hw.psm.x could delete an unrelated hw_psm_x line.
+chroot_loader_conf_set() {
+    local name="$1" value="$2"
+    # Full `if`, not `[[ ... ]] && return` — as a standalone statement the latter
+    # returns 1 whenever the test is false, which trips set -e (CLAUDE.md).
+    if [[ -z "${name}" ]]; then
+        return 0
+    fi
+    local esc="${name//./\\.}"
+    try "loader.conf: ${name}=${value}" \
+        chroot_sh "f=/boot/loader.conf; touch \"\$f\"; \
+grep -v '^${esc}=' \"\$f\" > \"\$f.new\" 2>/dev/null || true; \
+printf '%s=\"%s\"\\n' '${name}' '${value}' >> \"\$f.new\"; \
+mv \"\$f.new\" \"\$f\""
+}
+
 # chroot_pkg — pkg install -y inside the target (non-interactive).
 chroot_pkg() {
     if [[ "${DRY_RUN:-0}" == "1" ]]; then

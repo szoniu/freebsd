@@ -206,8 +206,20 @@ pkg install -y bash git ${PRIV_TOOL:-doas} || true
 $( [[ "${PRIV_TOOL:-doas}" == "doas" ]] && printf 'echo "permit persist :wheel" > /usr/local/etc/doas.conf\n' )
 
 # loader.conf (boot-critical only)
+# _loader_set: sysrc(8) validates the variable name as a shell identifier and
+# rejects dots, so every dotted knob (vfs.zfs.arc_max here) has to be written
+# straight into the file. Rewrite-in-place, so re-running is idempotent.
+# zfs_load has no dot and goes through sysrc unchanged.
+_loader_set() {
+	_f=/boot/loader.conf
+	_e=\$(printf '%s' "\$1" | sed 's/\\./\\\\./g')
+	touch "\$_f"
+	grep -v "^\${_e}=" "\$_f" > "\$_f.new" 2>/dev/null || true
+	printf '%s="%s"\\n' "\$1" "\$2" >> "\$_f.new"
+	mv "\$_f.new" "\$_f"
+}
 $( [[ "${FS_PROFILE}" == "zfs" ]] && echo 'sysrc -f /boot/loader.conf zfs_load=YES' )
-$( [[ -n "${ARC_MAX_BYTES:-}" ]] && echo "sysrc -f /boot/loader.conf vfs.zfs.arc_max=${ARC_MAX_BYTES}" )
+$( [[ -n "${ARC_MAX_BYTES:-}" ]] && echo "_loader_set vfs.zfs.arc_max ${ARC_MAX_BYTES}" )
 SETUP
 }
 
