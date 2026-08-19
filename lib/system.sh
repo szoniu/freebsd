@@ -43,6 +43,51 @@ _system_reassert_login_conf() {
         chroot_sh 'cap_mkdb /etc/login.conf'
 }
 
+# _system_verify_root_password — last line of defence for the "root with no
+# password" failure: bsdinstall silently ignored ROOTPASS_ENC under
+# nonInteractive=YES on 15.1 and shipped systems whose root logged in on the
+# console without a password. The setup script now sets the hash explicitly
+# (pw -H 0), so this only re-checks the RESULT — cheap insurance against a
+# future bsdinstall/pw change breaking it again. Reads /etc/master.passwd
+# directly because `pw usershow` masks the field, and never logs the hash
+# itself, only its shape. Sets ROOT_PW_STATE for the POST-INSTALL notes.
+_system_verify_root_password() {
+    ROOT_PW_STATE="unknown"
+    if [[ "${DRY_RUN:-0}" == "1" ]]; then
+        einfo "[DRY-RUN] would verify the root password field in /etc/master.passwd"
+        ROOT_PW_STATE="dry-run"
+        return 0
+    fi
+    local field="" rc=0
+    field=$(chroot_sh "grep '^root:' /etc/master.passwd | cut -d: -f2" 2>/dev/null) || rc=$?
+    # Distinguish "read failed" from "field is empty": a failed chroot/read must
+    # NOT be reported as a missing password (that would cry wolf on every broken
+    # mount), and an empty field must not be hidden behind a read error either.
+    if (( rc != 0 )); then
+        eerror "Could not read /etc/master.passwd on the target (chroot exit ${rc}) — verify the root password by hand"
+        return 0
+    fi
+    case "${field}" in
+        '$'*)
+            ROOT_PW_STATE="set"
+            einfo "Root password is set (hashed)"
+            ;;
+        '')
+            ROOT_PW_STATE="missing"
+            eerror "SECURITY: the installed system has NO root password — root would log in without one"
+            eerror "  Fix it on first boot:  passwd root"
+            ;;
+        '*'*)
+            ROOT_PW_STATE="locked"
+            ewarn "Root password login is disabled on the target (field '*') — log in as ${USERNAME:-your user} and use ${PRIV_TOOL:-doas}"
+            ;;
+        *)
+            eerror "Unrecognised root password field on the target — check with: grep '^root:' /etc/master.passwd"
+            ;;
+    esac
+    return 0
+}
+
 # _system_create_baseline_be — ZFS-only: snapshot the pristine install as a named
 # boot environment. freebsd-update/pkg auto-create BEs on later upgrades, but a
 # clean post-install baseline gives the user an immediate, known-good rollback
@@ -132,6 +177,16 @@ _system_write_postinstall_notes() {
     # (lib/desktop.sh) wires pam_xdg ONLY when the module exists in base and
     # degrades to a note otherwise — so phrase this conditionally instead of
     # claiming the PAM line is always there, and give the manual fallback.
+    # Root password state comes from _system_verify_root_password, which runs
+    # earlier in system_finalize. Only the abnormal states get a line — a normal
+    # install would just be noise.
+    local root_pw_note=""
+    case "${ROOT_PW_STATE:-unknown}" in
+        missing) root_pw_note="- !! SECURITY: root has NO password on this system. Set one NOW: passwd root" ;;
+        locked)  root_pw_note="- Root password login is disabled (master.passwd field '*'). Use '${priv}' from the '${user:-<none>}' account; 'passwd root' sets one if you want console root." ;;
+        unknown) root_pw_note="- Could not read the root password field during install — verify by hand: grep '^root:' /etc/master.passwd" ;;
+    esac
+
     local xdg_note=""
     if _de_is_wayland "${de}"; then
         xdg_note="- Wayland session (${de}) starts from a tty login (no display manager). XDG_RUNTIME_DIR=/var/run/user/<uid> is created at login by pam_xdg (FreeBSD base) — the installer appends 'session optional pam_xdg.so' to /etc/pam.d/login when pam_xdg is present in base. Verify: grep pam_xdg /etc/pam.d/login — if missing (pam_xdg absent from this base), create the dir yourself before starting the compositor: mkdir -p /var/run/user/<uid>, chown it to your user, chmod 700 (e.g. from your shell profile)."
@@ -164,6 +219,7 @@ System notes
 - Privilege escalation uses ${priv} (members of the 'wheel' group).
 - Locale is set via an /etc/login.conf class (FreeBSD has no /etc/locale.conf);
   cap_mkdb /etc/login.conf was run so the change is live.
+${root_pw_note}
 ${xdg_note}
 
 Device
@@ -244,6 +300,7 @@ system_finalize() {
     einfo "Finalizing system..."
 
     _system_reassert_login_conf
+    _system_verify_root_password
     _system_create_baseline_be
     _system_reassert_efi_entry
     _system_configure_wifi

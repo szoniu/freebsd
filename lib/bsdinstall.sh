@@ -186,6 +186,13 @@ LOGINCONF
 fi
 cap_mkdb /etc/login.conf
 
+# root password (hash via stdin, never argv). We do NOT rely on ROOTPASS_ENC:
+# on 15.1 bsdinstall was observed to ignore it under nonInteractive=YES, leaving
+# the installed system with NO root password at all. Setting it here is the same
+# mechanism we already use for the user account, and it is idempotent, so a
+# --resume that re-runs the setup script just re-applies the same hash.
+$( [[ -n "${ROOT_PASSWORD_HASH:-}" ]] && printf 'printf %%s %q | pw usermod -n root -H 0\n' "${ROOT_PASSWORD_HASH}" )
+
 # user account (hash via stdin, never argv)
 if [ -n ${q_user} ] && ! pw usershow ${q_user} >/dev/null 2>&1; then
     pw useradd -n ${q_user} -c ${q_full} -d /home/${q_user} -m -s /usr/local/bin/bash -G ${q_groups} -L "${LOCALE_CLASS:-english}"

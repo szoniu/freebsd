@@ -137,8 +137,15 @@ assert_not_contains "no useradd -p hash in argv" "pw useradd -p" "${BSDINSTALL_S
 FAKE_HASH_Q='\$6\$abc.def/ghi\$0123456789ABCDEF'
 assert_contains "ROOTPASS_ENC carries escaped hash" "ROOTPASS_ENC=${FAKE_HASH_Q}" "${BSDINSTALL_SCRIPT}"
 assert_contains "pw usermod stdin carries escaped hash" "printf %s ${FAKE_HASH_Q} | pw usermod -n" "${BSDINSTALL_SCRIPT}"
-assert_eq "escaped hash appears at least twice (root + user)" "true" \
-    "$([[ "$(grep -cF -- "${FAKE_HASH_Q}" "${BSDINSTALL_SCRIPT}" || true)" -ge 2 ]] && echo true || echo false)"
+# (3a) The ROOT hash must ALSO be applied explicitly by the setup script, not just
+# handed to bsdinstall as ROOTPASS_ENC: under nonInteractive=YES on 15.1 that knob
+# was ignored and the installed system ended up with NO root password at all.
+assert_contains "root hash piped to pw -H 0" "| pw usermod -n root -H 0" "${BSDINSTALL_SCRIPT}"
+assert_contains "root pw line carries escaped hash" \
+    "printf %s ${FAKE_HASH_Q} | pw usermod -n root -H 0" "${BSDINSTALL_SCRIPT}"
+# Three occurrences now: ROOTPASS_ENC (belt), the explicit root pw line, and the user.
+assert_eq "escaped hash appears at least 3x (ROOTPASS_ENC + root + user)" "true" \
+    "$([[ "$(grep -cF -- "${FAKE_HASH_Q}" "${BSDINSTALL_SCRIPT}" || true)" -ge 3 ]] && echo true || echo false)"
 # And the dangerous UNESCAPED bare hash must NOT appear (would be sh-expanded).
 assert_not_contains "no bare unescaped \$6\$ hash" "${FAKE_HASH}" "${BSDINSTALL_SCRIPT}"
 
@@ -173,6 +180,7 @@ assert_not_contains "no ZFSBOOT_DISKS in UFS"  "ZFSBOOT_DISKS"   "${BSDINSTALL_S
 # ROOTPASS_ENC + stdin-piped user hash still apply for UFS.
 assert_contains "UFS ROOTPASS_ENC present"     "ROOTPASS_ENC"    "${BSDINSTALL_SCRIPT}"
 assert_contains "UFS user hash piped to pw"    "| pw usermod -n" "${BSDINSTALL_SCRIPT}"
+assert_contains "UFS root hash set explicitly" "| pw usermod -n root -H 0" "${BSDINSTALL_SCRIPT}"
 
 rm -f "${BSDINSTALL_SCRIPT}"
 
