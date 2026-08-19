@@ -216,6 +216,23 @@ desktop_install() {
             chroot_sh "sysrc seatd_group=video; pw groupmod video -m ${USERNAME}"
     fi
 
+    # --- input device access ---------------------------------------------------
+    # /dev/input/event* is 0600 root:wheel by default, so libinput running as the
+    # user cannot open ANY input device: the compositor comes up and renders, but
+    # the keyboard and touchpad are dead and there is no cursor — with no error
+    # to go on. seatd does not hand these out on FreeBSD; the grant has to come
+    # from devfs.rules. (kern.evdev.rcpt_mask already defaults to 12 on 15.1, so
+    # permissions are the whole problem.)
+    #
+    # Applied to EVERY desktop, not just _de_is_wayland: this was field-found on
+    # KDE, which that helper classifies as X11 because it ships a display
+    # manager — yet Plasma exposes a Wayland session too. The user is already in
+    # `video` (the gpu phase adds them), so no extra group juggling.
+    if [[ "${desktop}" != "none" ]]; then
+        einfo "Granting group video access to /dev/input/* (devfs.rules)"
+        chroot_devfs_rule_add "input/*" 0660 video
+    fi
+
     # --- XDG_RUNTIME_DIR for tty-started Wayland sessions -----------------------
     # These compositors have NO display manager: the session starts from a tty
     # login, and nothing creates /var/run/user/<uid> — so the very first

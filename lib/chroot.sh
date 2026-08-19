@@ -54,6 +54,39 @@ printf '%s=\"%s\"\\n' '${name}' '${value}' >> \"\$f.new\"; \
 mv \"\$f.new\" \"\$f\""
 }
 
+# chroot_devfs_rule_add — grant a group access to a /dev subtree on the target,
+# persistently. devfs(8) permissions do NOT survive a reboot (devfs is rebuilt
+# every boot), so a chmod/chown is pointless: the grant has to come from a
+# ruleset applied at boot — a section in /etc/devfs.rules plus
+# devfs_system_ruleset in rc.conf (devfs.rules(5); the [localrules=10]
+# name/number follows the Handbook convention).
+#
+# All callers share ONE [localrules=10] section: a second section with the same
+# name would be ambiguous, so the header is written once and every later rule is
+# inserted right BELOW it (awk, not >>), which also keeps the rules inside the
+# section if anything else ever appends to the file. Idempotent on both counts —
+# the header and each individual rule are added only when absent.
+chroot_devfs_rule_add() {
+    local glob="$1" mode="${2:-0660}" group="${3:-video}"
+    if [[ -z "${glob}" ]]; then
+        return 0
+    fi
+    # The rule line needs literal single quotes around the glob; building it from
+    # a $q variable inside the target script avoids a quoting thicket here.
+    try "devfs.rules: ${glob} mode ${mode} group ${group}" chroot_sh "$(cat <<DEVFSRULE
+q="'"
+f=/etc/devfs.rules
+rule="add path \${q}${glob}\${q} mode ${mode} group ${group}"
+touch "\$f"
+grep -q '^\[localrules=10\]' "\$f" || printf '\n[localrules=10]\n' >> "\$f"
+if ! grep -qF "\$rule" "\$f"; then
+    awk -v r="\$rule" '{ print } /^\[localrules=10\]/ && !d { print r; d = 1 }' "\$f" > "\$f.new" && mv "\$f.new" "\$f"
+fi
+sysrc devfs_system_ruleset=localrules
+DEVFSRULE
+)"
+}
+
 # chroot_pkg — pkg install -y inside the target (non-interactive).
 chroot_pkg() {
     if [[ "${DRY_RUN:-0}" == "1" ]]; then

@@ -187,6 +187,14 @@ _system_write_postinstall_notes() {
         unknown) root_pw_note="- Could not read the root password field during install — verify by hand: grep '^root:' /etc/master.passwd" ;;
     esac
 
+    # Input access is what makes a Wayland session usable at all; the grant is a
+    # devfs ruleset tied to the `video` group, so a user added LATER (outside the
+    # installer) will hit the same dead-keyboard symptom until they join it.
+    local input_note=""
+    if [[ "${de}" != "none" ]]; then
+        input_note="- /dev/input/* is mode 0660 group 'video' via /etc/devfs.rules ([localrules=10]); ${user:-your user} is already in that group. A user added later needs: pw groupmod video -m <user> (then log out and back in), otherwise a Wayland session starts with no keyboard or pointer."
+    fi
+
     local xdg_note=""
     if _de_is_wayland "${de}"; then
         xdg_note="- Wayland session (${de}) starts from a tty login (no display manager). XDG_RUNTIME_DIR=/var/run/user/<uid> is created at login by pam_xdg (FreeBSD base) — the installer appends 'session optional pam_xdg.so' to /etc/pam.d/login when pam_xdg is present in base. Verify: grep pam_xdg /etc/pam.d/login — if missing (pam_xdg absent from this base), create the dir yourself before starting the compositor: mkdir -p /var/run/user/<uid>, chown it to your user, chmod 700 (e.g. from your shell profile)."
@@ -219,6 +227,7 @@ System notes
 - Privilege escalation uses ${priv} (members of the 'wheel' group).
 - Locale is set via an /etc/login.conf class (FreeBSD has no /etc/locale.conf);
   cap_mkdb /etc/login.conf was run so the change is live.
+${input_note}
 ${root_pw_note}
 ${xdg_note}
 

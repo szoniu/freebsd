@@ -136,19 +136,13 @@ NOTE
 }
 
 # _laptop_backlight — let the video group drive /dev/backlight/* so backlight(8)
-# and desktop brightness keys work without root. devfs(8) permissions are NOT
-# persistent — they must come from a ruleset applied at boot: a section in
-# /etc/devfs.rules + devfs_system_ruleset in rc.conf (devfs.rules(5); the
-# [localrules=10] name/number follows the Handbook convention).
+# and desktop brightness keys work without root. The persistence mechanics
+# (devfs.rules + devfs_system_ruleset) live in chroot_devfs_rule_add, which the
+# desktop phase also uses for input/* — sharing it keeps both rules in ONE
+# [localrules=10] section instead of writing a second, ambiguous header.
 _laptop_backlight() {
     einfo "Granting group video write access to /dev/backlight/* (devfs.rules)"
-    try "Writing devfs backlight ruleset (localrules)" chroot_sh "$(cat <<'DEVFSSCRIPT'
-if ! grep -qs 'backlight' /etc/devfs.rules 2>/dev/null; then
-    printf '\n[localrules=10]\nadd path '\''backlight/*'\'' mode 0660 group video\n' >> /etc/devfs.rules
-fi
-sysrc devfs_system_ruleset=localrules
-DEVFSSCRIPT
-)"
+    chroot_devfs_rule_add "backlight/*" 0660 video
 }
 
 # _laptop_touchpad — enable the I2C-HID stack. Modern "Windows Precision"

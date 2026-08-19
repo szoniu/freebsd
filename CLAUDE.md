@@ -77,6 +77,7 @@ lib/                    — Library modules (SOURCED, never executed)
 │                         _resolve_part_by_type
 ├── chroot.sh           — chroot_exec / chroot_sh / chroot_pkg / chroot_teardown (all DRY_RUN-aware)
 │                         + chroot_loader_conf_set (dotted loader.conf knobs — sysrc refuses dots)
+│                         + chroot_devfs_rule_add (shared [localrules=10] devfs ruleset)
 ├── gpu.sh              — gpu_install: drm-kmod + AMD Phoenix firmware flavors + kld_list +
 │                         video group (OUTER process, via chroot_*)
 ├── desktop.sh          — desktop_install: X11/Wayland prereqs, DE pkg, display manager,
@@ -123,7 +124,8 @@ docs/                   — DESIGN.md (the research brief / spec) + HANDOFF.md (
                           live checklist) + DAILY-DRIVER-AUDIT.md (laptop candidate verdicts)
 presets/                — example.conf
 tests/                  — Standalone tests (test_config / test_hardware / test_checkpoint /
-                          test_validate / test_bsdinstall / test_loader_conf; shellcheck.sh); live-hw-check.sh
+                          test_validate / test_bsdinstall / test_loader_conf / test_devfs_rules;
+                          shellcheck.sh); live-hw-check.sh
                           (POSIX sh — runs on the bare live medium, do NOT introduce bashisms)
 hooks/                  — before_install.sh.example / after_install.sh.example
 ```
@@ -249,6 +251,13 @@ exit must not mask it). Use `einfo/ewarn/eerror/elog`; `die` aborts.
 - **amdgpu/i915kms load via `sysrc kld_list+=…`, NEVER loader.conf.** drm-kmod in loader.conf
   panics early boot (drm-kmod #100). Always use `kld_list` in rc.conf. (On some 14.3 boxes even
   `kld_list` froze boot → fallback is `kldload amdgpu` post-boot.)
+- **`/dev/input/*` needs a devfs rule or the session has no keyboard/mouse.** Defaults are
+  `0600 root:wheel`, so libinput running as the user opens nothing — the compositor renders
+  but is dead to input, with no error. `seatd` does NOT hand these out; the grant must come
+  from `/etc/devfs.rules` (`add path 'input/*' mode 0660 group video`) + `devfs_system_ruleset`,
+  written via `chroot_devfs_rule_add`. Applies to Plasma-Wayland too, not just the tiling
+  compositors. `kern.evdev.rcpt_mask` already defaults to 12 on 15.1 — permissions are the
+  whole problem. Regression guard: `tests/test_devfs_rules.sh`.
 - **`seatd`, not elogind/systemd-logind, for Wayland.** Install `wayland seatd dbus`, `sysrc
   seatd_enable=YES dbus_enable=YES`, and **`pw groupmod _seatd -m USER`** (commonly forgotten →
   the compositor fails silently). `elogind` and `seatd` conflict — pick seatd.
@@ -327,6 +336,7 @@ bash tests/test_checkpoint.sh    # Checkpoint set/reached/validate/migrate
 bash tests/test_validate.sh      # validate_config() pre-install safety gate
 bash tests/test_bsdinstall.sh    # bsdinstall script generation (ZFS/UFS/GELI, injection safety)
 bash tests/test_loader_conf.sh   # loader.conf writes (dotted knobs, idempotence, no dotted sysrc)
+bash tests/test_devfs_rules.sh   # devfs.rules ruleset (input/* + backlight/*, one shared section)
 bash tests/shellcheck.sh         # Static analysis (needs shellcheck)
 ```
 
