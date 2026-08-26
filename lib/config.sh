@@ -191,8 +191,8 @@ validate_config() {
     # Display manager: only sddm/gdm/lightdm/none are wired (desktop.sh enables
     # ${dm}_enable). A garbage value would `sysrc <garbage>_enable=YES`.
     if [[ -n "${DISPLAY_MANAGER:-}" ]] && \
-       [[ "${DISPLAY_MANAGER}" != "sddm" && "${DISPLAY_MANAGER}" != "gdm" && "${DISPLAY_MANAGER}" != "lightdm" && "${DISPLAY_MANAGER}" != "none" ]]; then
-        errors+=("DISPLAY_MANAGER='${DISPLAY_MANAGER}' — must be sddm, gdm, lightdm, or none")
+       [[ "${DISPLAY_MANAGER}" != "ly" && "${DISPLAY_MANAGER}" != "sddm" && "${DISPLAY_MANAGER}" != "gdm" && "${DISPLAY_MANAGER}" != "lightdm" && "${DISPLAY_MANAGER}" != "none" ]]; then
+        errors+=("DISPLAY_MANAGER='${DISPLAY_MANAGER}' — must be ly, sddm, gdm, lightdm, or none")
     fi
 
     if [[ -n "${GPU_VENDOR:-}" ]] && \

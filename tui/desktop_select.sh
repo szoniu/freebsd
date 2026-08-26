@@ -5,7 +5,11 @@ source "${LIB_DIR}/protection.sh"
 # screen_desktop_select — pick DESKTOP_TYPE and derive DISPLAY_MANAGER.
 #
 # The DM mapping must stay in lockstep with lib/desktop.sh's _de_default_dm():
-# kde/lxqt -> sddm, gnome -> gdm (bundled), xfce/mate/cinnamon -> lightdm. The
+# kde -> ly, lxqt -> sddm, gnome -> gdm (bundled), xfce/mate/cinnamon -> lightdm.
+# KDE gets ly because SDDM cannot start a Wayland session on FreeBSD (it derives
+# the VT device name as a letter, FreeBSD numbers them in hex) — see the header
+# of lib/desktop.sh and issue #22. LXQt stays on SDDM: its session is X11-only,
+# so that bug never fires. The
 # Wayland compositors (sway/niri/hyprland/mango) and the "none" server profile
 # get NO display manager — on FreeBSD they start from a tty login via seatd
 # (there is no systemd-logind), so DISPLAY_MANAGER=none here.
@@ -30,7 +34,7 @@ screen_desktop_select() {
     local choice
     choice=$(dialog_radiolist "Desktop Environment" \
         "none"     "Server (no GUI) — base system only, tty login"        "${on[none]}" \
-        "kde"      "KDE Plasma + SDDM — X11 path most stable on FreeBSD"   "${on[kde]}" \
+        "kde"      "KDE Plasma + ly — X11 + Wayland (SDDM breaks Wayland here)" "${on[kde]}" \
         "gnome"    "GNOME + GDM — needs procfs in fstab"                   "${on[gnome]}" \
         "xfce"     "Xfce + LightDM — lightweight, reliable"                "${on[xfce]}" \
         "mate"     "MATE + LightDM — traditional, reliable"                "${on[mate]}" \
@@ -52,7 +56,8 @@ screen_desktop_select() {
     # Derive the display manager. Keep this in lockstep with _de_default_dm()
     # in lib/desktop.sh — Wayland compositors and the server profile use no DM.
     case "${DESKTOP_TYPE}" in
-        kde|lxqt)                  DISPLAY_MANAGER="sddm" ;;
+        kde)                       DISPLAY_MANAGER="ly" ;;
+        lxqt)                      DISPLAY_MANAGER="sddm" ;;
         gnome)                     DISPLAY_MANAGER="gdm" ;;
         xfce|mate|cinnamon)        DISPLAY_MANAGER="lightdm" ;;
         sway|niri|hyprland|mango)  DISPLAY_MANAGER="none" ;;

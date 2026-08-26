@@ -21,16 +21,27 @@
 #     it autostarts per-session (XDG), so we only install the packages.
 #   - GNOME/Cinnamon/LXQt/MATE need `proc /proc procfs rw 0 0` in the target
 #     /etc/fstab or they misbehave (process listing, session bookkeeping).
-#   - Display managers: SDDM (KDE/LXQt), GDM (GNOME), LightDM (Xfce/MATE/Cinnamon).
-#     Wayland tiling compositors (sway/niri/hyprland/mango) have NO display
-#     manager — they start from a tty login (seatd-backed).
+#   - Display managers: ly (KDE), SDDM (LXQt), GDM (GNOME), LightDM (Xfce/MATE/
+#     Cinnamon). Wayland tiling compositors (sway/niri/hyprland/mango) have NO
+#     display manager — they start from a tty login (seatd-backed).
+#   - SDDM CANNOT start a Wayland session on FreeBSD. It builds the target
+#     console name as a LETTER ('a' + n - 1) while FreeBSD numbers VTs in hex
+#     (ttyv0..ttyv9, ttyva, ttyvb) — so VT12 is /dev/ttyvb and SDDM looks for
+#     /dev/ttyvl, fails to jump, and the compositor never gets DRM master. X11
+#     is unaffected because there SDDM launches `Xorg vt9` and Xorg handles the
+#     console itself. KDE therefore gets `ly`, which starts the session on the
+#     SAME console it already runs on and sidesteps the bug entirely (issue #22).
+#   - ly is NOT an rc.d service on FreeBSD. It hooks into getty: an entry in
+#     /etc/gettytab plus a rewritten ttyv1 line in /etc/ttys. `sysrc ly_enable`
+#     does nothing. The port ships its own setup script for this.
 source "${LIB_DIR}/protection.sh"
 
 # _de_default_dm — default display manager for a desktop type (DESIGN.md §4).
 # Empty string = no display manager (tty login, Wayland tiling compositors).
 _de_default_dm() {
     case "$1" in
-        kde|lxqt)         echo "sddm" ;;
+        kde)              echo "ly" ;;    # SDDM cannot launch Wayland here — see header
+        lxqt)             echo "sddm" ;;  # X11-only session; SDDM's VT bug never triggers
         gnome)            echo "gdm" ;;
         xfce|mate|cinnamon) echo "lightdm" ;;
         *)                echo "" ;;   # sway/niri/hyprland: none
@@ -111,9 +122,112 @@ _ensure_target_procfs() {
 # _install_pipewire — PipeWire is a USER service on FreeBSD (no rc.conf knob; it
 # autostarts per-session via XDG). We only install the packages here.
 _install_pipewire() {
-    einfo "Installing PipeWire (user service — no rc.conf enable, autostarts per-session)"
+    einfo "Installing PipeWire (user service — no rc.conf enable, starts per-session)"
     try "Installing PipeWire stack" \
         chroot_pkg pipewire wireplumber pipewire-spa-oss
+
+    # ...and something has to actually START it (issue #25). The packages were
+    # going in correctly all along; what was missing is the launch. On FreeBSD
+    # there is no pipewire_enable rc knob and no systemd user unit, so the only
+    # mechanism left is XDG autostart — which the port does not appear to ship.
+    # Symptom when nothing starts it: the session log fills with
+    # "received error while creating the stream ... Could not connect to PipeWire"
+    # and audio/screencast are dead even though the codec was detected fine.
+    #
+    # Written idempotently (create only when absent) so this is correct either
+    # way: if a future version of the port does ship an autostart entry, we
+    # leave it alone instead of fighting it. Same approach the Void and Gentoo
+    # siblings already take for their init systems.
+    #
+    # /usr/local/etc/xdg is FreeBSD's system XDG_CONFIG_DIRS root.
+    einfo "Ensuring PipeWire XDG autostart (no rc knob, no systemd user units)"
+    try "Installing PipeWire autostart entries" chroot_sh '
+mkdir -p /usr/local/etc/xdg/autostart
+if [ ! -e /usr/local/etc/xdg/autostart/pipewire.desktop ]; then
+    cat > /usr/local/etc/xdg/autostart/pipewire.desktop <<PWEOF
+[Desktop Entry]
+Type=Application
+Name=PipeWire Media System
+Exec=/usr/local/bin/pipewire
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-Phase=Initialization
+PWEOF
+fi
+if [ ! -e /usr/local/etc/xdg/autostart/wireplumber.desktop ]; then
+    cat > /usr/local/etc/xdg/autostart/wireplumber.desktop <<WPEOF
+[Desktop Entry]
+Type=Application
+Name=WirePlumber Session Manager
+Exec=/usr/local/bin/wireplumber
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-Phase=Applications
+WPEOF
+fi
+'
+}
+
+# _setup_ly — wire ly into getty on the target (it has no rc.d service).
+#
+# The port ships its own setup script (`@sample etc/ly/setup.sh.sample`, which
+# pkg materialises as /usr/local/etc/ly/setup.sh). Prefer it: it is the
+# vendor-supported path and will follow upstream if the wiring ever changes.
+# Then VERIFY the result rather than trusting the exit status, and fall back to
+# the wiring documented in issue #22 if ttyv1 is still on a plain getty.
+#
+# Deliberately does NOT write config.ini. pkg already drops one from
+# config.ini.sample, and the dotfiles wizard later REPLACES that file with a
+# symlink into the dotfiles repo (docs/ly-config.md). An installer-authored
+# config would either be clobbered or would silently block that symlink.
+_setup_ly() {
+    einfo "Wiring ly into getty (no rc.d service on FreeBSD)"
+    try "Running the ly port setup script" chroot_sh '
+if [ -f /usr/local/etc/ly/setup.sh ]; then
+    sh /usr/local/etc/ly/setup.sh || echo "ly setup.sh returned non-zero — verifying by hand"
+elif [ -f /usr/local/etc/ly/setup.sh.sample ]; then
+    sh /usr/local/etc/ly/setup.sh.sample || echo "ly setup.sh.sample returned non-zero — verifying by hand"
+else
+    echo "no ly setup script shipped by the port — using the documented wiring"
+fi
+
+# Verify, then repair. grep for an active Ly getty on ttyv1.
+if grep -Eq "^ttyv1[[:space:]].*getty[[:space:]]+Ly" /etc/ttys; then
+    echo "ly already wired on ttyv1"
+    exit 0
+fi
+
+# gettytab entry (idempotent).
+if ! grep -q "^Ly|" /etc/gettytab 2>/dev/null; then
+    printf "\nLy|Ly Display Manager:\\\n\t:lo=/usr/local/bin/ly_wrapper:al=root:\n" >> /etc/gettytab
+fi
+
+# Point ttyv1 at it, keeping a backup of the original line.
+cp -n /etc/ttys /etc/ttys.orig 2>/dev/null || true
+sed -i "" -E "s|^ttyv1[[:space:]]+"[^"]*"([[:space:]]+.*)|ttyv1	"/usr/libexec/getty Ly"\1|" /etc/ttys
+
+if grep -Eq "^ttyv1[[:space:]].*getty[[:space:]]+Ly" /etc/ttys; then
+    echo "ly wired on ttyv1 (fallback path)"
+else
+    echo "WARNING: could not wire ly on ttyv1 — log in on a tty and run /usr/local/etc/ly/setup.sh"
+fi
+'
+}
+
+# _install_network_gui — a desktop with no way to join a WiFi network is not a
+# desktop (issue #24). FreeBSD has no NetworkManager, so Plasma ships no network
+# module: after install the only route to WiFi was hand-editing
+# /etc/wpa_supplicant.conf from a console.
+#
+# wifimgr, not networkmgr: networkmgr is a GTK **tray icon** (Gtk.StatusIcon),
+# and Plasma-Wayland exposes no StatusIcon host — it would simply never appear.
+# It also pulls in `sudo`, which collides with a PRIV_TOOL=doas install. wifimgr
+# is a plain GTK3 window with its own .desktop entry, so it shows up in the
+# launcher under either session.
+_install_network_gui() {
+    einfo "Installing a GUI network manager (wifimgr)"
+    chroot_pkg wifimgr || \
+        ewarn "wifimgr not installed — WiFi will have to be configured via /etc/wpa_supplicant.conf"
 }
 
 # desktop_install — install the selected desktop environment + display manager.
@@ -169,6 +283,7 @@ desktop_install() {
     # Xfce's LightDM greeter is a separate package; pull it in alongside the DM.
     local -a dm_pkgs=()
     case "${dm}" in
+        ly)      dm_pkgs=(x11/ly) ;;
         sddm)    dm_pkgs=(x11/sddm) ;;
         gdm)     dm_pkgs=(gdm) ;;
         lightdm) dm_pkgs=(lightdm lightdm-gtk-greeter) ;;
@@ -238,7 +353,9 @@ desktop_install() {
             chroot_sh "sysrc seatd_enable=YES"
     fi
 
-    if [[ -n "${dm}" ]]; then
+    if [[ "${dm}" == "ly" ]]; then
+        _setup_ly
+    elif [[ -n "${dm}" ]]; then
         try "Enabling ${dm}" \
             chroot_sh "sysrc ${dm}_enable=YES"
     fi
@@ -289,6 +406,9 @@ desktop_install() {
 
     # --- audio ----------------------------------------------------------------
     _install_pipewire
+
+    # --- network GUI ----------------------------------------------------------
+    _install_network_gui
 
     einfo "=== Desktop installation complete (${desktop}, DM: ${dm:-none/tty}) ==="
 }

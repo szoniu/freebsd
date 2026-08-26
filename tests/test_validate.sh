@@ -218,15 +218,25 @@ assert_eq "DESKTOP_TYPE=mango returns 0" "0" "${rc}"
 # ============================
 echo ""
 echo "=== Test: DISPLAY_MANAGER enum ==="
-# Only sddm/gdm/lightdm/none are wired; a garbage value would sysrc a bogus knob.
+# Only ly/sddm/gdm/lightdm/none are wired; a garbage value would sysrc a bogus
+# knob. NB `ly` used to be the invalid example here — it became a real choice
+# when KDE moved off SDDM (issue #22), so it now has to assert the opposite.
 clear_config
 set_valid_config
-export DISPLAY_MANAGER="ly"
+export DISPLAY_MANAGER="wdm"
 
 rc=0
 output=$(validate_config) || rc=$?
-assert_eq "Bad DISPLAY_MANAGER (ly) returns 1" "1" "${rc}"
+assert_eq "Bad DISPLAY_MANAGER (wdm) returns 1" "1" "${rc}"
 assert_contains "Output mentions DISPLAY_MANAGER" "DISPLAY_MANAGER" "${output}"
+
+# ly is getty-wired rather than an rc service, but it IS a supported choice.
+clear_config
+set_valid_config
+export DISPLAY_MANAGER="ly"
+rc=0
+validate_config >/dev/null 2>&1 || rc=$?
+assert_eq "DISPLAY_MANAGER=ly accepted" "0" "${rc}"
 
 # ============================
 echo ""

@@ -121,7 +121,7 @@ readonly -a CONFIG_VARS=(
     PRIV_TOOL               # doas | sudo
     # --- desktop / gpu ---
     DESKTOP_TYPE            # none|kde|gnome|xfce|mate|cinnamon|lxqt|sway|niri|hyprland|mango
-    DISPLAY_MANAGER         # sddm|gdm|lightdm|none
+    DISPLAY_MANAGER         # ly|sddm|gdm|lightdm|none  (ly = getty-based, no rc knob)
     DESKTOP_EXTRAS          # space-separated apps (firefox, etc.)
     GPU_VENDOR              # amd|intel|nvidia|none|unknown
     GPU_DEVICE_ID           # PCI device id
