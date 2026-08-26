@@ -42,7 +42,11 @@ assert_eq() {
     fi
 }
 
-TESTCONF="$(mktemp -t loaderconf)"
+# `mktemp -t PREFIX` is the BSD spelling; GNU mktemp wants a template with
+# trailing X's and aborts ("too few X's in template"), so the suite could not
+# run on the Linux box these installers are developed on. An explicit template
+# path behaves identically on both.
+TESTCONF="$(mktemp "${TMPDIR:-/tmp}/loaderconf.XXXXXX")"
 trap 'rm -f "${TESTCONF}" "${TESTCONF}.new"' EXIT
 
 # Mock: run the helper's script locally, with the target path swapped for a temp

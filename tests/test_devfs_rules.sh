@@ -41,8 +41,10 @@ assert_eq() {
     fi
 }
 
-RULES="$(mktemp -t devfsrules)"
-SYSRC_LOG="$(mktemp -t devfssysrc)"
+# See test_loader_conf.sh: `mktemp -t PREFIX` is BSD-only and breaks under GNU
+# mktemp, which is what runs on the development machine.
+RULES="$(mktemp "${TMPDIR:-/tmp}/devfsrules.XXXXXX")"
+SYSRC_LOG="$(mktemp "${TMPDIR:-/tmp}/devfssysrc.XXXXXX")"
 trap 'rm -f "${RULES}" "${RULES}.new" "${SYSRC_LOG}"' EXIT
 
 chroot_sh() {
