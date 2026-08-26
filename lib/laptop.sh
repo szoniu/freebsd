@@ -17,6 +17,8 @@
 #     simply do not attach without matching hardware; plus psm(4) synaptics
 #     extensions for PS/2 touchpads
 #   - ThinkPad: acpi_ibm (hotkeys/fan/LED) when SMBIOS says LENOVO + ThinkPad
+#   - wired-over-WiFi: dhclient knows nothing about interface metrics, so the
+#     default route belongs to whichever interface got its lease LAST
 #
 # Everything lands on the target via chroot_* (DRY_RUN-aware) wrapped in try();
 # kld_list appends reuse the idempotent _gpu_kld_list_append (lib/gpu.sh) and
@@ -38,8 +40,128 @@ laptop_setup_apply() {
     _laptop_backlight
     _laptop_touchpad
     _laptop_thinkpad
+    _laptop_wired_priority
 
     einfo "=== Laptop configuration complete ==="
+}
+
+# _laptop_wired_priority — make Ethernet win over WiFi (issue #27).
+#
+# dhclient(8) on FreeBSD has no notion of interface metrics: the default route
+# is simply whatever the LAST lease installed. On a laptop with the cable in and
+# a known WiFi network in range, that is a coin flip resolved anew on every
+# boot — and when WiFi wins, traffic leaves over the slower link. The nastier
+# half is DNS: `dhclient wlan0` rewrites /etc/resolv.conf with the wireless
+# network's servers, and if those are unreachable from the wired network every
+# lookup burns a timeout. The user-visible symptom is "the internet is crawling",
+# with a link that tests perfectly fine.
+#
+# Field-observed on the X1 Titanium: `default ... UGS wlan0` while ue0 held an
+# address and an active link but no default route. After the fix ping 1.1.1.1
+# went from 100% loss to 1.5 ms.
+#
+# TWO layers, because neither covers the other's case: devd(8) reacts to
+# cable hotplug, but at BOOT it races netif, which brings both interfaces up
+# almost simultaneously. The dhclient exit hook is what makes boot deterministic.
+#
+# Interface names are resolved AT RUNTIME, never baked in here. The issue
+# proposed detecting the wired NIC at install time, but the machine that found
+# this bug was on `ue0` — USB Ethernet, i.e. a dongle that is not present during
+# a PCI scan and can be swapped for a different one later. Enumerating at run
+# time also means a docking station that appears as `cdce0` works with no
+# reinstall.
+_laptop_wired_priority() {
+    einfo "Wiring Ethernet priority over WiFi (dhclient has no route metrics)"
+
+    # devd: cable in -> drop wlan0; cable out -> bring it back. The subsystem
+    # match is a regex over interface names, covering the usual wired drivers
+    # (USB dongles first: ue/cdce/axge/ure, then on-board em/igb/igc/re/bge/msk).
+    try "devd rule: wired link toggles wlan0" chroot_sh '
+mkdir -p /usr/local/etc/devd
+cat > /usr/local/etc/devd/wired-priority.conf <<DEVDEOF
+# Installed by the FreeBSD TUI installer (laptop phase) — see issue #27.
+# dhclient has no interface metrics, so a wired link must actively displace
+# WiFi. Delete this file (and reload devd) to let both links coexist.
+notify 10 {
+    match "system"    "IFNET";
+    match "subsystem" "(ue|cdce|axge|ure|em|igb|igc|re|bge|msk|alc)[0-9]+";
+    match "type"      "LINK_UP";
+    action "service netif stop wlan0 || true";
+};
+
+notify 10 {
+    match "system"    "IFNET";
+    match "subsystem" "(ue|cdce|axge|ure|em|igb|igc|re|bge|msk|alc)[0-9]+";
+    match "type"      "LINK_DOWN";
+    action "service netif start wlan0 || true";
+};
+DEVDEOF
+'
+
+    # dhclient exit hook: if a WiFi lease lands while a wired interface is up
+    # and addressed, hand the default route and resolv.conf back to the cable.
+    # Non-destructive on purpose — wlan0 keeps its address, so services reachable
+    # only over WiFi keep working; just the OUTBOUND path moves to the cable.
+    #
+    # Quoting note, because this bit is a trap: the script is a SINGLE-quoted
+    # bash string (nothing expands here) containing a QUOTED heredoc delimiter
+    # (nothing expands in the target /bin/sh either), so every $ below belongs to
+    # the hook at run time and reaches the file verbatim. The first draft used a
+    # double-quoted string with backslash escapes and bash expanded $interface
+    # while BUILDING the string — under `set -u` that is an "unbound variable"
+    # abort, and without it would have silently written an empty case label.
+    # Consequence of the quoted form: no single quotes inside the body.
+    try "dhclient exit hook: restore wired default route + DNS" chroot_sh 'cat > /etc/dhclient-exit-hooks <<"HOOKEOF"
+# Installed by the FreeBSD TUI installer (laptop phase) — see issue #27.
+# dhclient sets the default route from whichever lease arrived last. At boot
+# that races; this puts the cable back in front. Wired interfaces are
+# enumerated at run time so a swapped USB-Ethernet dongle still works.
+case "$interface" in
+wlan*)
+	for _if in $(ifconfig -l 2>/dev/null); do
+		case "$_if" in
+			lo*|wlan*|bridge*|tap*|tun*|vlan*|pflog*|pfsync*|epair*) continue ;;
+		esac
+		ifconfig "$_if" 2>/dev/null | grep -q "status: active" || continue
+		ifconfig "$_if" 2>/dev/null | grep -q "inet " || continue
+
+		_lease=/var/db/dhclient.leases.$_if
+		[ -f "$_lease" ] || continue
+
+		_gw=$(grep "option routers" "$_lease" 2>/dev/null | tail -1 | sed -e "s/.*routers //" -e "s/;//")
+		_dns=$(grep "option domain-name-servers" "$_lease" 2>/dev/null | tail -1 | sed -e "s/.*servers //" -e "s/;//")
+
+		if [ -n "$_gw" ]; then
+			route delete default >/dev/null 2>&1
+			route add default "$_gw" >/dev/null 2>&1
+			logger -t dhclient-exit-hooks "wlan lease: default route restored via $_if ($_gw)"
+		fi
+		if [ -n "$_dns" ]; then
+			echo "$_dns" | tr "," "\n" | sed -e "s/^/nameserver /" > /etc/resolv.conf
+		fi
+		break
+	done
+	;;
+esac
+HOOKEOF
+chmod 644 /etc/dhclient-exit-hooks'
+
+    _quirk_note_append <<'WIREDNOTE'
+
+--- Ethernet has priority over WiFi ---
+Plugging a cable stops wlan0 (devd rule: /usr/local/etc/devd/wired-priority.conf),
+and a WiFi lease taken while the cable is up hands the default route and DNS back
+to the wired interface (/etc/dhclient-exit-hooks).
+
+This is deliberate, not a fault. dhclient(8) has no interface metrics, so without
+it the default route belongs to whichever lease arrived last — traffic then leaves
+over the slower link, and /etc/resolv.conf gets the wireless network's DNS servers.
+If those are unreachable from the wired network, every lookup waits for a timeout
+and the connection merely FEELS broken.
+
+To let both links coexist: delete both files, then 'service devd restart'.
+
+WIREDNOTE
 }
 
 # _laptop_powerd — adaptive CPU frequency + deeper idle states (DESIGN.md §6
