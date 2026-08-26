@@ -171,17 +171,18 @@ detect_gpu() {
 # --- WiFi (top GPD Pocket 4 risk: MediaTek MT7922 has no working FreeBSD driver) ---
 
 detect_wifi() {
-    WIFI_VENDOR=""; WIFI_DEVICE_ID=""; WIFI_SUPPORTED=1
+    WIFI_VENDOR=""; WIFI_DEVICE_ID=""; WIFI_SUPPORTED=1; WIFI_DEVICE_NAME=""; WIFI_INTEL_IWX=0
     local bus vid did name
     # WiFi class is 0x0280 (other network controller); ethernet is 0x0200.
     read -r bus vid did name < <(_pci_emit_class '0x0280' || true) || true
     if [[ -z "${vid:-}" ]]; then
         # No PCI WiFi (could be USB or absent). Leave supported unknown-ish.
         WIFI_SUPPORTED=1
-        export WIFI_VENDOR WIFI_DEVICE_ID WIFI_SUPPORTED
+        export WIFI_VENDOR WIFI_DEVICE_ID WIFI_SUPPORTED WIFI_DEVICE_NAME WIFI_INTEL_IWX
         return 0
     fi
     WIFI_DEVICE_ID="${vid}:${did}"
+    WIFI_DEVICE_NAME="${name}"
     case "${vid}" in
         14c3)  # MediaTek — mt76 is in-tree but DISCONNECTED FROM BUILD as of 2026
             WIFI_VENDOR="mediatek"; WIFI_SUPPORTED=0
@@ -189,7 +190,33 @@ detect_wifi() {
             ewarn "      Bootstrap via wired/USB-Ethernet; built-in WiFi will not associate." ;;
         8086)
             WIFI_VENDOR="intel"; WIFI_SUPPORTED=1
-            einfo "WiFi: Intel ${WIFI_DEVICE_ID} (${name}) — iwlwifi (802.11 a/b/g/n/ac since 14.3 via LinuxKPI; ax/WiFi 6 in progress — Foundation, 2026)" ;;
+            # Two Intel drivers exist and the choice matters a lot (issue #19).
+            #
+            # iwlwifi(4) is the LinuxKPI wrapper: broad chip coverage, but on the
+            # field-tested X1 Titanium (AX201) it needed a firmware package the
+            # installer never pulled, and even WITH the firmware it failed to
+            # attach (error 8). iwx(4) — the native driver in base — took the
+            # same card immediately and negotiated VHT80, which is MORE than
+            # iwlwifi promises (a/b/g/n/ac).
+            #
+            # iwx binds a bounded family: its iwx_devices[] table
+            # (sys/dev/iwx/if_iwx.c) is exactly AX200, AX201, AX210 and AX211 —
+            # 17 PCI ids hidden behind PCI_PRODUCT_INTEL_WL_22500_* macros.
+            # We match on the marketing name instead of importing those macros:
+            # the set is identical, it reads as the rule it is, and it does not
+            # rot into a stale numeric table on the next FreeBSD release.
+            #
+            # NOT covered by iwx, deliberately: 9260, AX411, BE2xx. Those keep
+            # the iwlwifi path — the issue asked whether "iwx instead of
+            # iwlwifi" is safe for older chips, and for 9260 the answer is no:
+            # it is absent from iwx_devices[], so blocklisting iwlwifi there
+            # would leave the machine with no WiFi driver at all.
+            if [[ "${name}" =~ AX2(00|01|10|11) ]]; then
+                WIFI_INTEL_IWX=1
+                einfo "WiFi: Intel ${WIFI_DEVICE_ID} (${name}) — native iwx(4) from base (VHT80; preferred over the iwlwifi LinuxKPI wrapper)"
+            else
+                einfo "WiFi: Intel ${WIFI_DEVICE_ID} (${name}) — iwlwifi via LinuxKPI (chip outside iwx_devices[]; needs wifi-firmware-iwlwifi-kmod)"
+            fi ;;
         10ec|0bda)
             WIFI_VENDOR="realtek"; WIFI_SUPPORTED=1
             einfo "WiFi: Realtek ${WIFI_DEVICE_ID} (${name}) — rtw88/rtw89 (best-effort)" ;;
@@ -200,7 +227,7 @@ detect_wifi() {
             WIFI_VENDOR="unknown"; WIFI_SUPPORTED=1
             einfo "WiFi: ${WIFI_DEVICE_ID} (${name}) — support unverified" ;;
     esac
-    export WIFI_VENDOR WIFI_DEVICE_ID WIFI_SUPPORTED
+    export WIFI_VENDOR WIFI_DEVICE_ID WIFI_SUPPORTED WIFI_DEVICE_NAME WIFI_INTEL_IWX
 }
 
 # --- Microsoft Surface (SMBIOS) -----------------------------------------------

@@ -164,8 +164,10 @@ _system_write_postinstall_notes() {
     local wifi_note="WiFi: detected driver present."
     if [[ "${WIFI_SUPPORTED:-1}" == "0" ]]; then
         wifi_note="WiFi: NO FreeBSD driver for the detected chip (${WIFI_VENDOR:-unknown} ${WIFI_DEVICE_ID:-}) — use wired/USB-Ethernet."
+    elif [[ "${WIFI_VENDOR:-}" == "intel" && "${WIFI_INTEL_IWX:-0}" == "1" ]]; then
+        wifi_note="WiFi: native iwx(4) + wlan0 wired into rc.conf (WPA/SYNCDHCP); if_iwlwifi is in devmatch_blocklist so devmatch loads iwx instead. Add your SSID/PSK to /etc/wpa_supplicant.conf, then 'service netif restart wlan0' (or reboot). Check with 'ifconfig iwx0' — if it is missing, 'kldload if_iwx' and report it."
     elif [[ "${WIFI_VENDOR:-}" == "intel" ]]; then
-        wifi_note="WiFi: if_iwlwifi + wlan0 wired into rc.conf (WPA/SYNCDHCP). Add your SSID/PSK to /etc/wpa_supplicant.conf, then 'service netif restart wlan0' (or reboot). NB: iwlwifi does 802.11 a/b/g/n/ac since 14.3 (LinuxKPI); ax/WiFi 6 is in progress (FreeBSD Foundation, 2026)."
+        wifi_note="WiFi: if_iwlwifi + wlan0 wired into rc.conf (WPA/SYNCDHCP), firmware from wifi-firmware-iwlwifi-kmod. Add your SSID/PSK to /etc/wpa_supplicant.conf, then 'service netif restart wlan0' (or reboot). This chip is outside iwx(4) coverage (iwx handles AX200/201/210/211 only), so it stays on the LinuxKPI wrapper: 802.11 a/b/g/n/ac."
     else
         wifi_note="WiFi: ${WIFI_VENDOR:-unknown} chip detected (a driver may exist) but NOT auto-configured — add the right module to kld_list + 'wlans_<dev>0=wlan0' + 'ifconfig_wlan0=\"WPA SYNCDHCP\"' by hand (FreeBSD Handbook ch. Wireless)."
     fi
@@ -260,20 +262,55 @@ _system_configure_wifi() {
         return 0
     fi
 
-    local kmod="" parent=""
+    # Intel splits two ways (issue #19, field-tested on X1 Titanium / AX201):
+    #
+    #   iwx(4)     — native, in base, covers AX200/AX201/AX210/AX211. Needs NO
+    #                firmware package and NO kld_list entry: devmatch(8) loads it
+    #                automatically once the LinuxKPI wrapper is out of the way.
+    #   iwlwifi(4) — LinuxKPI wrapper for everything else (9260, AX411, BE2xx).
+    #                Needs wifi-firmware-iwlwifi-kmod, which this installer never
+    #                pulled — so the driver attached, found the card, and died on
+    #                "no suitable firmware found".
+    #
+    # The parent interface name differs (iwx0 vs iwlwifi0) and `wlans_<parent>`
+    # must name the right one — generating wlans_iwlwifi0 when the card actually
+    # comes up as iwx0 yields no wlan interface at all, which is precisely how
+    # this was found.
+    local kmod="" parent="" blocklist="" fw_pkg=""
     case "${WIFI_VENDOR:-}" in
         intel)
-            kmod="if_iwlwifi"; parent="iwlwifi0" ;;
+            if [[ "${WIFI_INTEL_IWX:-0}" == "1" ]]; then
+                parent="iwx0"
+                # devmatch only reaches for iwx if the LinuxKPI wrapper is out of
+                # its way. NB the knob is devmatch_blocklist — rc.conf(5) marks
+                # devmatch_blacklist DEPRECATED (it still works, appended to the
+                # blocklist, but new code should not use the old spelling).
+                blocklist="if_iwlwifi"
+            else
+                kmod="if_iwlwifi"; parent="iwlwifi0"
+                fw_pkg="wifi-firmware-iwlwifi-kmod"
+            fi ;;
         *)
             ewarn "WiFi: ${WIFI_VENDOR:-unknown} chip detected but not auto-wired (driver ambiguous) — see POST-INSTALL notes"
             return 0 ;;
     esac
 
-    einfo "WiFi: wiring ${WIFI_VENDOR} (${kmod} -> wlan0) into rc.conf..."
+    # Firmware for the LinuxKPI path. Without it iwlwifi loads, prints
+    # "Detected Intel(R) Wi-Fi ...", fails to find its .ucode and gives up —
+    # the exact log from the field test. Best-effort: a missing package must not
+    # abort an otherwise bootable install.
+    if [[ -n "${fw_pkg}" ]]; then
+        einfo "WiFi: installing ${fw_pkg} (iwlwifi has no firmware in base)"
+        chroot_pkg "${fw_pkg}" || \
+            ewarn "WiFi: ${fw_pkg} not installed — iwlwifi will fail with 'no suitable firmware found'"
+    fi
+
+    einfo "WiFi: wiring ${WIFI_VENDOR} (${kmod:-iwx (base, via devmatch)} -> wlan0) into rc.conf..."
     # Outer heredoc is UNQUOTED so ${kmod}/${parent} interpolate on the host; the inner
     # wpa_supplicant template uses a QUOTED heredoc so its body lands verbatim.
     try "Enabling WiFi driver ${kmod} + wlan0 (WPA/DHCP)" chroot_sh "$(cat <<WIFISCRIPT
-sysrc kld_list+=${kmod}
+${kmod:+sysrc kld_list+=${kmod}}
+${blocklist:+sysrc devmatch_blocklist+=${blocklist}}
 sysrc wlans_${parent}=wlan0
 sysrc ifconfig_wlan0="WPA SYNCDHCP"
 if [ ! -e /etc/wpa_supplicant.conf ]; then

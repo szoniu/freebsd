@@ -153,6 +153,8 @@ readonly -a CONFIG_VARS=(
     WIFI_VENDOR             # detected WiFi chip vendor (mediatek/intel/realtek/...)
     WIFI_DEVICE_ID          # pci vendor:device (e.g. 14c3:0616)
     WIFI_SUPPORTED          # 0|1  (0 = no FreeBSD driver, e.g. MT7922 -> wired bootstrap)
+    WIFI_DEVICE_NAME        # human-readable chip name from pciconf (e.g. "Wi-Fi 6 AX201")
+    WIFI_INTEL_IWX          # 0|1  (1 = Intel chip covered by native iwx(4): AX200/201/210/211)
     BLUETOOTH_DETECTED      # 0|1
     WEBCAM_DETECTED         # 0|1
     BATTERY_DETECTED        # 0|N  ACPI battery count (hw.acpi.battery.units) — gates the laptop phase
