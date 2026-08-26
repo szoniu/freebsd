@@ -153,7 +153,7 @@ firmware po każdym minor upgrade. Na niektórych 14.3 `amdgpu` w `kld_list` zam
 fallback `kldload amdgpu` post-boot.
 
 **Wayland prereq (każdy vendor):** `pkg install wayland seatd dbus` → `sysrc seatd_enable=YES
-dbus_enable=YES` → `pw groupmod _seatd -m USER`.
+dbus_enable=YES` → `sysrc seatd_group=video; pw groupmod video -m USER`.
 
 ---
 
@@ -250,7 +250,9 @@ rc.conf Surface: `sysrc kld_list+="ig4 iichid"` (HID-over-I2C); AX200/AX201:
 pw useradd -n "$USERNAME" -c "$FULLNAME" -d "/home/$USERNAME" -m -s /usr/local/bin/bash -G wheel,operator,video
 printf '%s' "$USER_HASH" | pw usermod -n "$USERNAME" -H 0     # -H = pre-hashed; -h = plaintext
 printf '%s' "$ROOT_HASH" | pw usermod -n root -H 0
-pw groupmod _seatd -m "$USERNAME"     # Wayland seat (CZĘSTO POMIJANE — compositor failuje bez tego)
+sysrc seatd_group=video                # socket seatd należy do seatd_group (domyślnie video)
+pw groupmod video -m "$USERNAME"       # Wayland seat (CZĘSTO POMIJANE — compositor failuje bez tego).
+                                       # Grupa `_seatd` NIE ISTNIEJE — `pw groupmod _seatd` zwraca "unknown group"
 ```
 
 **rc.conf fragment (desktop + laptop):**

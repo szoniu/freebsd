@@ -81,7 +81,7 @@ lib/                    — Library modules (SOURCED, never executed)
 ├── gpu.sh              — gpu_install: drm-kmod + AMD Phoenix firmware flavors + kld_list +
 │                         video group (OUTER process, via chroot_*)
 ├── desktop.sh          — desktop_install: X11/Wayland prereqs, DE pkg, display manager,
-│                         seatd/dbus, _seatd group; install_extras (Noctalia, gaming)
+│                         seatd/dbus, seatd_group=video; install_extras (Noctalia, gaming)
 ├── system.sh           — system_finalize: cap_mkdb re-assert, bectl baseline, efibootmgr
 │                         re-pin, POST-INSTALL notes, pkg cache reclaim (the "finalize" phase)
 ├── umpc.sh             — device_quirks_apply: dispatch on DEVICE_PROFILE (generic /
@@ -259,7 +259,7 @@ exit must not mask it). Use `einfo/ewarn/eerror/elog`; `die` aborts.
   compositors. `kern.evdev.rcpt_mask` already defaults to 12 on 15.1 — permissions are the
   whole problem. Regression guard: `tests/test_devfs_rules.sh`.
 - **`seatd`, not elogind/systemd-logind, for Wayland.** Install `wayland seatd dbus`, `sysrc
-  seatd_enable=YES dbus_enable=YES`, and **`pw groupmod _seatd -m USER`** (commonly forgotten →
+  seatd_enable=YES dbus_enable=YES`, and **`sysrc seatd_group=video; pw groupmod video -m USER`** (commonly forgotten →
   the compositor fails silently). `elogind` and `seatd` conflict — pick seatd.
 - **PipeWire is a USER service.** No `pipewire_enable` in rc.conf; it starts per-user via XDG
   autostart. Install `pipewire wireplumber pipewire-spa-oss`.

@@ -9,8 +9,12 @@
 #
 # Key FreeBSD facts (DESIGN.md §3/§4), all different from the Linux siblings:
 #   - No systemd-logind / elogind: Wayland sessions use seatd, and the user must
-#     be in the `_seatd` group (`pw groupmod _seatd -m USER`) or the compositor
-#     fails to acquire a seat. elogind and seatd conflict — we always pick seatd.
+#     be in the group guarding seatd's socket — that is `video` (seatd_group,
+#     default video). There is NO `_seatd` group; `pw groupmod _seatd` errors
+#     "unknown group". elogind and seatd conflict — we always pick seatd.
+#   - "X11 desktop" is not the same as "no Wayland session". Plasma 6.6 installs
+#     /usr/local/share/wayland-sessions/plasma.desktop alongside the X11 one, so
+#     KDE needs seatd too — see _de_ships_wayland_session() below.
 #   - Services are rc.conf knobs set with `sysrc NAME_enable=YES` (no symlink
 #     farm like runit, no `systemctl enable`).
 #   - PipeWire is a USER service on FreeBSD — there is NO pipewire_enable rc knob;
@@ -57,6 +61,33 @@ _de_is_wayland() {
         sway|niri|hyprland|mango) return 0 ;;
         *)                        return 1 ;;
     esac
+}
+
+# _de_ships_wayland_session — TRUE for desktops that expose a Wayland session
+# even though _de_is_wayland() classifies them as X11 (because they ship a
+# display manager). Plasma 6.6 on 15.1 installs plasma.desktop into
+# /usr/local/share/wayland-sessions, and kwin_wayland cannot take DRM master
+# without libseat — so a KDE install that skipped seat management gave
+#
+#     kwin_wayland_drm: No suitable DRM devices have been found
+#
+# and the session died the moment it was picked. Field-found on the X1 Titanium
+# (issue #21): after install, seatd was neither installed nor enabled.
+#
+# Deliberately separate from _de_is_wayland(): that helper answers "is this a
+# DM-less tty-login compositor?", which drives Xorg-vs-wayland package choice
+# and pam_xdg. Widening it would wrongly drop Xorg from KDE. This is the same
+# split the devfs input rule below already had to make.
+_de_ships_wayland_session() {
+    case "$1" in
+        kde|gnome) return 0 ;;
+        *)         return 1 ;;
+    esac
+}
+
+# _de_needs_seat — anything that can run a Wayland session needs seatd.
+_de_needs_seat() {
+    _de_is_wayland "$1" || _de_ships_wayland_session "$1"
 }
 
 # _de_needs_procfs — these desktops need procfs mounted at /proc (DESIGN.md §4).
@@ -124,6 +155,14 @@ desktop_install() {
         einfo "Installing X11 session prereqs (xorg + dbus)"
         try "Installing Xorg prereqs" \
             chroot_pkg xorg dbus
+        # ...plus seatd when the DE also ships a Wayland session (KDE/GNOME).
+        # Xorg does its own VT/DRM handling, so X11 never needed this; the
+        # Wayland session sitting in the same menu does.
+        if _de_ships_wayland_session "${desktop}"; then
+            einfo "${desktop} also ships a Wayland session — adding seatd"
+            try "Installing seat backend (seatd + wayland)" \
+                chroot_pkg seatd wayland
+        fi
     fi
 
     # --- the desktop environment + display manager -----------------------------
@@ -194,7 +233,7 @@ desktop_install() {
     try "Enabling dbus" \
         chroot_sh "sysrc dbus_enable=YES"
 
-    if _de_is_wayland "${desktop}"; then
+    if _de_needs_seat "${desktop}"; then
         try "Enabling seatd" \
             chroot_sh "sysrc seatd_enable=YES"
     fi
@@ -211,7 +250,7 @@ desktop_install() {
     # "unknown group" and breaks the step). Pin the group to `video` and ensure
     # the user is in it (DESIGN.md §6 — the single most-forgotten step; the
     # compositor fails silently without seat access).
-    if _de_is_wayland "${desktop}" && [[ -n "${USERNAME:-}" ]]; then
+    if _de_needs_seat "${desktop}" && [[ -n "${USERNAME:-}" ]]; then
         try "Granting ${USERNAME} seat access (group video)" \
             chroot_sh "sysrc seatd_group=video; pw groupmod video -m ${USERNAME}"
     fi
