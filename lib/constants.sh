@@ -56,13 +56,15 @@ readonly -a AMD_PHOENIX_FW_FLAVORS=(
     gpu-firmware-amd-kmod-vcn-4-0-2
 )
 
-# Disk probe order: NVMe-first (nda is the real device on 14+, nvd an alias),
-# then SATA/USB/VirtIO. The boot medium is excluded at detection time.
 # --- pkg repo branch -----------------------------------------------------------
 # Override of the base /etc/pkg/FreeBSD.conf. Writing under /usr/local/etc is what
 # the base file itself recommends: the base copy is restored by freebsd-update, so
 # an edit there would not survive the next patch-level upgrade.
 : "${PKG_REPO_CONF:=/usr/local/etc/pkg/repos/FreeBSD.conf}"
+# Deliberately quarterly, NOT desktop-dependent: this is the fallback for a preset
+# that predates the knob, replayed via `install.sh install` (no wizard, so the
+# screen that derives latest-for-desktops never runs). Such a preset must keep
+# producing what it produced before the knob existed, not silently move to latest.
 : "${PKG_BRANCH_DEFAULT:=quarterly}"
 # Kernel modules live in a SEPARATE repo per base version (kmods_<branch>_<VERSION_MINOR>).
 # The higher priority makes the drm-kmod build choice explicit instead of relying on
@@ -71,6 +73,8 @@ readonly -a AMD_PHOENIX_FW_FLAVORS=(
 # 6.6.25.1501000 in kmods_latest_1).
 readonly PKG_KMODS_PRIORITY=10
 
+# Disk probe order: NVMe-first (nda is the real device on 14+, nvd an alias),
+# then SATA/USB/VirtIO. The boot medium is excluded at detection time.
 readonly -a DISK_PROBE_ORDER=(nda nvd ada da vtbd)
 
 # Timeouts
