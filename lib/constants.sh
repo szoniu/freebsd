@@ -58,6 +58,19 @@ readonly -a AMD_PHOENIX_FW_FLAVORS=(
 
 # Disk probe order: NVMe-first (nda is the real device on 14+, nvd an alias),
 # then SATA/USB/VirtIO. The boot medium is excluded at detection time.
+# --- pkg repo branch -----------------------------------------------------------
+# Override of the base /etc/pkg/FreeBSD.conf. Writing under /usr/local/etc is what
+# the base file itself recommends: the base copy is restored by freebsd-update, so
+# an edit there would not survive the next patch-level upgrade.
+: "${PKG_REPO_CONF:=/usr/local/etc/pkg/repos/FreeBSD.conf}"
+: "${PKG_BRANCH_DEFAULT:=quarterly}"
+# Kernel modules live in a SEPARATE repo per base version (kmods_<branch>_<VERSION_MINOR>).
+# The higher priority makes the drm-kmod build choice explicit instead of relying on
+# cross-repo version comparison: the main `latest` repo carries a build for a
+# DIFFERENT base than ours (measured on 15.1: 6.6.25.1500068 vs the correct
+# 6.6.25.1501000 in kmods_latest_1).
+readonly PKG_KMODS_PRIORITY=10
+
 readonly -a DISK_PROBE_ORDER=(nda nvd ada da vtbd)
 
 # Timeouts
@@ -119,6 +132,8 @@ readonly -a CONFIG_VARS=(
     USER_PASSWORD_HASH      # $6$ SHA-512 (never plaintext)
     USER_GROUPS             # comma-separated, e.g. wheel,operator,video
     PRIV_TOOL               # doas | sudo
+    # --- pkg repo ---
+    PKG_BRANCH              # quarterly | latest  (switches BOTH repos: ports + ports-kmods)
     # --- desktop / gpu ---
     DESKTOP_TYPE            # none|kde|gnome|xfce|mate|cinnamon|lxqt|sway|niri|hyprland|mango
     DISPLAY_MANAGER         # ly|sddm|gdm|lightdm|none  (ly = getty-based, no rc knob)

@@ -108,6 +108,8 @@ tui/                    — TUI screens (screen_*; each returns TUI_NEXT/BACK/AB
 │                         class) + console keymap (vt)
 ├── gpu_config.sh       — screen_gpu_config: show detected GPU, override vendor
 ├── desktop_select.sh   — screen_desktop_select: DESKTOP_TYPE + derived DISPLAY_MANAGER
+├── pkg_branch_config.sh — screen_pkg_branch_config: PKG_BRANCH quarterly|latest; default
+│                         follows DESKTOP_TYPE (none → quarterly, any DE → latest)
 ├── user_config.sh      — screen_user_config: root pw, user, groups (wheel,operator,video),
 │                         doas/sudo
 ├── extra_packages.sh   — screen_extra_packages: extra pkg + Noctalia Wayland shell + gaming
@@ -124,7 +126,8 @@ docs/                   — DESIGN.md (the research brief / spec) + HANDOFF.md (
                           live checklist) + DAILY-DRIVER-AUDIT.md (laptop candidate verdicts)
 presets/                — example.conf
 tests/                  — Standalone tests (test_config / test_hardware / test_checkpoint /
-                          test_validate / test_bsdinstall / test_loader_conf / test_devfs_rules;
+                          test_validate / test_bsdinstall / test_loader_conf / test_devfs_rules /
+                          test_pkg_branch;
                           shellcheck.sh); live-hw-check.sh
                           (POSIX sh — runs on the bare live medium, do NOT introduce bashisms)
 hooks/                  — before_install.sh.example / after_install.sh.example
@@ -166,6 +169,7 @@ list + inline value docs). Highlights vs the Linux siblings:
 | `ROOT_PASSWORD_HASH` / `USER_PASSWORD_HASH` | `$6$…` | SHA-512 (`openssl passwd -6`); never plaintext, never `$y$` yescrypt |
 | `USER_GROUPS` | wheel,operator,video | FreeBSD convention |
 | `PRIV_TOOL` | doas / sudo | doas writes `/usr/local/etc/doas.conf` |
+| `PKG_BRANCH` | quarterly / latest | written to `/usr/local/etc/pkg/repos/FreeBSD.conf` BEFORE `pkg bootstrap`; switches BOTH `FreeBSD-ports` and `FreeBSD-ports-kmods` (kmods get `priority: 10`). Enum-checked in `validate_config` — the value lands inside a root-executed heredoc |
 | `GPU_KMOD` | amdgpu / i915kms / nvidia-modeset | loaded via `kld_list`, never loader.conf |
 | `DRM_PKG` | drm-kmod / drm-61-kmod / drm-66-kmod / drm-612-kmod | metaport matches running kernel |
 | `GPU_FW_FLAVORS` | space-separated | AMD Phoenix needs all six or it panics |
@@ -337,6 +341,7 @@ bash tests/test_validate.sh      # validate_config() pre-install safety gate
 bash tests/test_bsdinstall.sh    # bsdinstall script generation (ZFS/UFS/GELI, injection safety)
 bash tests/test_loader_conf.sh   # loader.conf writes (dotted knobs, idempotence, no dotted sysrc)
 bash tests/test_devfs_rules.sh   # devfs.rules ruleset (input/* + backlight/*, one shared section)
+bash tests/test_pkg_branch.sh    # pkg repo branch: ${ABI} verbatim, BOTH repos, before bootstrap, preset injection
 bash tests/shellcheck.sh         # Static analysis (needs shellcheck)
 ```
 

@@ -57,6 +57,7 @@ source "${TUI_DIR}/network_config.sh"
 source "${TUI_DIR}/locale_config.sh"
 source "${TUI_DIR}/gpu_config.sh"
 source "${TUI_DIR}/desktop_select.sh"
+source "${TUI_DIR}/pkg_branch_config.sh"
 source "${TUI_DIR}/user_config.sh"
 source "${TUI_DIR}/extra_packages.sh"
 source "${TUI_DIR}/preset_save.sh"
@@ -162,6 +163,7 @@ run_configuration_wizard() {
         screen_locale_config \
         screen_gpu_config \
         screen_desktop_select \
+        screen_pkg_branch_config \
         screen_user_config \
         screen_extra_packages \
         screen_preset_save \

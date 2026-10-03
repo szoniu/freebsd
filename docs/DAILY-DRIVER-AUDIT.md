@@ -69,6 +69,37 @@ w `homelab/inventory/hardware/`.
 | Portale | ✅/⚠️ | xdg-desktop-portal 1.20.3, -wlr 0.8.3, -luminous 0.1.11, -gnome 47.3 (dla niri), -gtk/-kde. **Brak devel/libei** → RemoteDesktop-with-input/InputCapture niemożliwe. Screenshare pipewire: Chromium ma PIPEWIRE=on domyślnie; sporadyczne buffer underruns — przetestować Meet/Teams zanim uznasz za produkcyjne |
 | Locki/notyfikacje/reszta | ✅ | swaylock 1.8.5(+effects), waylock 1.5 (najodporniejszy, polecany), hyprlock/hypridle, mako/dunst/swaync, grim/slurp, wl-clipboard, waybar 0.15, fuzzel 1.13, swww 0.11 (awww brak → fallback w skryptach już jest) |
 
+### Branch pkg: quarterly vs latest (freebsd#28)
+
+Wersje w tabeli wyżej to stan **quarterly** — domyślnego brancha z bazowego `/etc/pkg/FreeBSD.conf`.
+Quarterly jest cięty co trzy miesiące i przyjmuje tylko poprawki bezpieczeństwa i buildu, więc na
+desktopie cały stack Wayland stoi minor za portami. Zmierzone na X1 Titanium (15.1, 2026-10-03):
+
+| pakiet | quarterly | latest |
+|---|---|---|
+| hyprland | 0.55.4 | 0.56.2_2 |
+| mesa-dri | 26.1.3 | 26.2.2 |
+| niri | 26.04_3 | 26.04_6 |
+| drm-66-kmod | 6.6.25.1501000_8 | 6.6.25.1501000_9 |
+
+**Instalator:** knob `PKG_BRANCH` (ekran po wyborze desktopu), domyślnie `latest` przy dowolnym DE
+i `quarterly` przy `DESKTOP_TYPE=none` — dla serwera stabilność quarterly jest celem, nie kosztem.
+Config trafia do `/usr/local/etc/pkg/repos/FreeBSD.conf` **przed** `pkg bootstrap` w setup scripcie,
+więc już bash/git/doas przychodzą z wybranego brancha. Wybór widać w podsumowaniu przed instalacją.
+
+⚠️ **Przełączać trzeba OBA repo naraz.** Moduły jądra mają własne repo per wersja bazy
+(`kmods_<branch>_<VERSION_MINOR>`). W głównym repo `latest` leży `drm-66-kmod` zbudowany pod
+**15.0** (`6.6.25.1500068`), a właściwy dla 15.1 (`…1501000`) jest dopiero w `kmods_latest_1`.
+Przełączenie samego `FreeBSD-ports` daje moduł spod innej bazy — dokładnie rozjazd drm-kmod, przed
+którym ostrzega DESIGN.md, tylko wywołany na własne życzenie. Dlatego `FreeBSD-ports-kmods` dostaje
+jawne `priority: 10` — wybór builda nie może zależeć od tego, że akurat wypada wyższy numer wersji.
+
+**Istniejący system** (tak przełączono X1): `bectl create przed-latest` → ten sam plik w
+`/usr/local/etc/pkg/repos/` → `pkg update -f` → `pkg upgrade` (u mnie 427 pakietów, +2 GiB) →
+**obowiązkowy reboot** (wymienia się moduł jądra pod żywą sesją). Kontrola po reboocie:
+`pkg which /boot/modules/i915kms.ko` (pakiet `_9`?) i `sysctl kern.osreldate` równy bazie z wersji
+modułu. **Nie sprawdzaj po `ls -l`** — data pliku to timestamp builda portu, nie instalacji.
+
 ### Gesty touchpada (Twój priorytet)
 
 libinput 1.31.1 w portach = silnik gestów identyczny jak na Linuksie. **Wszystko rozstrzyga

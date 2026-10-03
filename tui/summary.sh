@@ -109,6 +109,10 @@ screen_summary() {
     [[ "${ENABLE_NOCTALIA:-no}" == "yes" ]] && summary+="Noctalia:     ${NOCTALIA_COMPOSITOR:-hyprland} compositor\n"
     [[ "${ENABLE_GAMING:-no}" == "yes" ]] && summary+="Gaming:       Steam / wine / gamescope\n"
     [[ -n "${EXTRA_PACKAGES:-}" ]] && summary+="Extra pkgs:   ${EXTRA_PACKAGES}\n"
+    # Always shown: unlike the extras above, the branch is never "off" — every
+    # package on the system comes from one of the two, so a silent default hides
+    # a real decision.
+    summary+="pkg branch:   ${PKG_BRANCH:-${PKG_BRANCH_DEFAULT:-quarterly}} (ports + kmods)\n"
     summary+="\n"
 
     # User account + privilege tool. Only hashes are stored; nothing here echoes

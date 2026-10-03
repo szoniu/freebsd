@@ -165,6 +165,15 @@ validate_config() {
         errors+=("PARTITION_SCHEME='${PARTITION_SCHEME}' — must be auto, dual-boot, or manual")
     fi
 
+    # PKG_BRANCH lands INSIDE a heredoc in the generated setup script, which runs
+    # chrooted as root. A preset value carrying a newline plus "PKGREPO" closes
+    # that heredoc early and everything after it executes as shell. config_load
+    # filters variable NAMES, not values, so this enum check is the gate.
+    if [[ -n "${PKG_BRANCH:-}" ]] && \
+       [[ "${PKG_BRANCH}" != "quarterly" && "${PKG_BRANCH}" != "latest" ]]; then
+        errors+=("PKG_BRANCH — must be quarterly or latest (got a value that is neither)")
+    fi
+
     # FreeBSD has no zram/swap-file path in this installer: swap is either a
     # GPT freebsd-swap partition (optionally .eli-encrypted) or nothing.
     if [[ -n "${SWAP_TYPE:-}" ]] && \
