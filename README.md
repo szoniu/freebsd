@@ -32,7 +32,7 @@ FreeBSD rozprowadza obraz **`*-memstick.img`** (NIE plik ISO). Pobierz **pełny 
 - Oficjalnie: https://www.freebsd.org/where/ → **Get FreeBSD** → **amd64**
 - Bezpośredni katalog (podstaw wersję na końcu ścieżki — `14.3/`, `15.0/`, `15.1/`): https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/
 
-Wybierz wydanie: **14.x (14.3 / 14.4) — zalecane** (najdojrzalsze sterowniki), albo **15.x (15.0 / 15.1)** jako „newest base". Plik: `FreeBSD-14.3-RELEASE-amd64-memstick.img` (dla 15.0 analogicznie `FreeBSD-15.0-RELEASE-amd64-memstick.img`). Wersji nie musisz nigdzie podawać instalatorowi — `drm-kmod` sam dobiera sterownik pod uruchomiony kernel (14.x → `drm-61`, **15.0 → `drm-66`**, 15.1 → `drm-612`).
+Wybierz wydanie **15.1** — jedyne sprawdzone w terenie (ProBook 06.2026, X1 Titanium 08.2026). 14.x i 15.0 instalator powinien obsłużyć, ale nie był na nich testowany na nośniku (decyzja 02.11.2026, #14). Plik: `FreeBSD-15.1-RELEASE-amd64-memstick.img` (pełny memstick — mini-memstick nie ma miejsca na distsety, #23). Wersji nie musisz nigdzie podawać instalatorowi — `drm-kmod` sam dobiera sterownik pod uruchomiony kernel (14.x → `drm-61`, 15.0 → `drm-66`, **15.1 → `drm-612`**).
 
 #### Nagranie przez `dd` (Linux)
 
@@ -55,13 +55,13 @@ sudo umount /dev/sdX*    # podstaw swoje sdX; gwiazdka = wszystkie partycje
 **3. Zapisz obraz** (podstaw `sdX`; `conv=fsync` wymusza zrzut na dysk przed końcem):
 
 ```bash
-sudo dd if=FreeBSD-14.3-RELEASE-amd64-memstick.img of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=FreeBSD-15.1-RELEASE-amd64-memstick.img of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
 Jeśli pobrałeś skompresowane `.img.xz`, rozpakuj w locie (bez rozpakowywania na dysk):
 
 ```bash
-xzcat FreeBSD-14.3-RELEASE-amd64-memstick.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
+xzcat FreeBSD-15.1-RELEASE-amd64-memstick.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
 **4. Dosynchronizuj i sprawdź.** `sync` opróżnia bufory; `lsblk` powinno teraz pokazać partycje FreeBSD na pendrive:
